@@ -134,14 +134,14 @@ class RabbitMQHandler(object):
 
 def monitor_heartbeats(connections, rate=2):
     """
-    launch the heartbeat of amqp, it's mostly for prevent the f@#$ firewall from droping the connection
+    launch the heartbeat of amqp, it's mostly for prevent the f@#$ firewall from dropping the connection
     """
     supports_heartbeats = False
     interval = 10000
     for conn in connections:
         if conn.heartbeat and conn.supports_heartbeats:
             supports_heartbeats = True
-            interval = min(conn.heartbeat / 2, interval)
+            interval = min(conn.heartbeat / 4, interval)
 
     if not supports_heartbeats:
         logging.getLogger(__name__).info('heartbeat is not enabled')
