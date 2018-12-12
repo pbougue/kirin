@@ -252,14 +252,14 @@
                 },
                 "horaireVoyageurArrivee":{
                     "dateHeure":"2015-09-21T15:50:00+0000",
-                    "heureLocale":"17:58:00",
+                    "heureLocale":"17:50:00",
                     "idFuseauHoraire":"Europe/Paris",
                     "nbJoursPasseMinuit":0,
                     "statutCirculationOPE": "DETOURNEMENT"
                 },
                 "horaireVoyageurDepart":{
                     "dateHeure":"2015-09-21T15:51:00+0000",
-                    "heureLocale":"17:58:00",
+                    "heureLocale":"17:51:00",
                     "idFuseauHoraire":"Europe/Paris",
                     "nbJoursPasseMinuit":0,
                     "statutCirculationOPE": "DETOURNEMENT"
