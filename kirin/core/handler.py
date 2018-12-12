@@ -419,7 +419,7 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
         last_departure = res_st.departure
         res_stoptime_updates.append(res_st)
 
-        # For a stop_time simply deleted or deleted_for_detour, we don't use previous value for
+        # For a stop_time deleted or deleted_for_detour, we don't use previous value for
         # arrival and departure time consistency
         if res_st.arrival_status not in ('deleted', 'deleted_for_detour'):
             last_nav_dep = utc_nav_departure_time
