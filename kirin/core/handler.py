@@ -32,6 +32,7 @@
 import datetime
 import logging
 import socket
+from collections import namedtuple
 from datetime import timedelta
 from dateutil import parser
 import pytz
@@ -72,7 +73,8 @@ def manage_consistency(trip_update):
     returns False if trip update cannot be managed
     """
     logger = logging.getLogger(__name__)
-    previous_stu = None
+    TimeDelayTuple = namedtuple('TimeDelayTuple', ['time', 'delay'])
+    previous_stop_event = TimeDelayTuple(time=None, delay=None)
     for current_order, stu in enumerate(trip_update.stop_time_updates):
         # rejections
         if stu.order != current_order:
@@ -87,8 +89,8 @@ def manage_consistency(trip_update):
         # modifications
         if stu.arrival is None:
             stu.arrival = stu.departure
-            if stu.arrival is None and previous_stu is not None:
-                stu.arrival = previous_stu.departure
+            if stu.arrival is None and previous_stop_event.time is not None:
+                stu.arrival = previous_stop_event.time
             if stu.arrival is None:
                 logger.warning("TripUpdate on navitia vj {nav_id} on {date} rejected: "
                                "StopTimeUpdate missing arrival time".format(
@@ -115,21 +117,32 @@ def manage_consistency(trip_update):
             stu.departure_delay = datetime.timedelta(0)
             log_stu_modif(trip_update, stu, "departure_delay = {v}".format(v=stu.departure_delay))
 
-        if previous_stu is not None and previous_stu.departure > stu.arrival:
-            delay_diff = previous_stu.departure_delay - stu.arrival_delay
-            stu.arrival += delay_diff
-            stu.arrival_delay += delay_diff
-            log_stu_modif(trip_update, stu, "arrival = {a} and arrival_delay = {a_d}".format(
-                                                        a=stu.arrival, a_d=stu.arrival_delay))
+        # not considering deleted arrival
+        if not is_deleted(stu.arrival_status):
+            # if arrival is before previous stop-event's time:
+            # push arrival time so that its delay is the same than for previous time
+            if previous_stop_event.time is not None and previous_stop_event.time > stu.arrival:
+                delay_diff = previous_stop_event.delay - stu.arrival_delay
+                stu.arrival_delay += delay_diff
+                stu.arrival += delay_diff
+                log_stu_modif(trip_update, stu, "arrival = {t} and arrival_delay = {d}".format(
+                                                            t=stu.arrival, d=stu.arrival_delay))
 
-        if stu.arrival > stu.departure:
-            stu.departure_delay += stu.arrival - stu.departure
-            stu.departure = stu.arrival
-            log_stu_modif(trip_update, stu, "departure = {a} and departure_delay = {a_d}".format(
-                                                        a=stu.departure, a_d=stu.departure_delay))
+            # store arrival as previous stop-event
+            previous_stop_event = TimeDelayTuple(time=stu.arrival, delay=stu.arrival_delay)
 
+        # not considering deleted departure (same logic as before)
         if not is_deleted(stu.departure_status):
-            previous_stu = stu
+            # if departure is before previous stop-event's time:
+            # push departure time so that its delay is the same than for previous time
+            if previous_stop_event.time is not None and previous_stop_event.time > stu.departure:
+                delay_diff = previous_stop_event.delay - stu.departure_delay
+                stu.departure_delay += delay_diff
+                stu.departure += delay_diff
+                log_stu_modif(trip_update, stu, "departure = {t} and departure_delay = {d}".format(
+                                                            t=stu.departure, d=stu.departure_delay))
+            # store departure as previous stop-event
+            previous_stop_event = TimeDelayTuple(time=stu.departure, delay=stu.departure_delay)
 
     return True
 
