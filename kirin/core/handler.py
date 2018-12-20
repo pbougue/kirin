@@ -273,6 +273,39 @@ def _make_stop_time_update(base_arrival, base_departure, last_departure, input_s
                           order=order)
 
 
+def is_stop_event_served(nav_stop, nav_order, event_name, new_stu, db_tu):
+    """
+    Returns True if the considered stop_time event (arrival or departure) is currently served
+    :param nav_stop: id of the stop point
+    :param nav_order: order of the stop_time in the trip
+    :param event_name: status' attribute name to look for ('arrival' or 'departure')
+    :param new_stu: new StopTimeUpdate being process
+    :param db_tu: TripUpdate in db (from previous processing)
+    """
+
+    stop_id = nav_stop.get('stop_point', {}).get('id')
+    # the new_stu prevails if provided
+    if new_stu is not None:
+        if is_deleted(getattr(new_stu, '{}_status'.format(event_name), ModificationType.none.name)):
+            return False
+        else:
+            return True
+    # 'undecided' if new_stu has no info about given stop, checking in previous TripUpdate
+    if db_tu is not None:
+        db_stu = db_tu.find_stop(stop_id, nav_order)
+        if db_stu is not None:
+            if is_deleted(getattr(db_stu, '{}_status'.format(event_name), ModificationType.none.name)):
+                return False
+            else:
+                return True
+        # 'undecided' if StopTime is not part of the TripUpdate (may happen if whole trip is deleted)
+
+    # on navitia's VJ simply test that the time field is provided
+    # TODO: check forbidden pickup/drop-off when Navitia provides info
+    event_time_field = 'utc_{}_time'.format(event_name)
+    return event_time_field in nav_stop and nav_stop.get(event_time_field, None) is not None
+
+
 def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
     """
     We need to merge the info from 3 sources:
@@ -323,7 +356,7 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
         res.stop_time_updates = []
         return res
 
-    last_nav_dep = None
+    last_stop_event_time = None
     last_departure = None
     utc_circulation_date = new_trip_update.vj.get_utc_circulation_date()
 
@@ -364,20 +397,28 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
         # we compute the arrival time and departure time on base schedule and take past mid-night into
         # consideration
         base_arrival = base_departure = None
-        if utc_nav_arrival_time is not None:
-            if last_nav_dep is not None and last_nav_dep > utc_nav_arrival_time:
-                # last departure is after arrival, it's a past-midnight
-                utc_circulation_date += timedelta(days=1)
-            base_arrival = _get_datetime(utc_circulation_date, utc_nav_arrival_time)
-
-        if utc_nav_departure_time is not None:
-            if utc_nav_arrival_time is not None and utc_nav_arrival_time > utc_nav_departure_time:
-                # departure is before arrival, it's a past-midnight
-                utc_circulation_date += timedelta(days=1)
-            base_departure = _get_datetime(utc_circulation_date, utc_nav_departure_time)
-
         stop_id = navitia_stop.get('stop_point', {}).get('id')
         new_st = new_trip_update.find_stop(stop_id, nav_order)
+
+        # considering only served arrival
+        if is_stop_event_served(navitia_stop, nav_order, 'arrival', new_st, db_trip_update):
+            if utc_nav_arrival_time is not None:
+                if last_stop_event_time is not None and last_stop_event_time > utc_nav_arrival_time:
+                    # last departure is after arrival, it's a past-midnight
+                    utc_circulation_date += timedelta(days=1)
+                base_arrival = _get_datetime(utc_circulation_date, utc_nav_arrival_time)
+            # store arrival as previous stop-event time
+            last_stop_event_time = utc_nav_arrival_time
+
+        # considering only served departure (same logic as before)
+        if is_stop_event_served(navitia_stop, nav_order, 'departure', new_st, db_trip_update):
+            if utc_nav_departure_time is not None:
+                if last_stop_event_time is not None and last_stop_event_time > utc_nav_departure_time:
+                    # departure is before arrival, it's a past-midnight
+                    utc_circulation_date += timedelta(days=1)
+                base_departure = _get_datetime(utc_circulation_date, utc_nav_departure_time)
+            # store departure as previous stop-event time
+            last_stop_event_time = utc_nav_departure_time
 
         if db_trip_update is not None and new_st is not None:
             """
@@ -436,11 +477,6 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
 
         last_departure = res_st.departure
         res_stoptime_updates.append(res_st)
-
-        # For a stop_time deleted or deleted_for_detour, we don't use previous value for
-        # arrival and departure time consistency
-        if not is_deleted(res_st.departure_status):
-            last_nav_dep = utc_nav_departure_time
 
     if has_changes:
         res.stop_time_updates = res_stoptime_updates
