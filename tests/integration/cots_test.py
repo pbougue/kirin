@@ -634,13 +634,11 @@ def test_cots_for_detour_in_advance():
         assert len(stop_time_updates) == 7
         assert stop_time_updates[2].departure_status == 'deleted_for_detour'
         assert stop_time_updates[2].arrival_status == 'deleted_for_detour'
-        assert stop_time_updates[2].arrival == datetime(2015, 9, 21, 15, 40)
-        assert stop_time_updates[2].departure == datetime(2015, 9, 21, 15, 40)
 
         assert stop_time_updates[3].departure_status == 'added_for_detour'
         assert stop_time_updates[3].arrival_status == 'added_for_detour'
-        assert stop_time_updates[3].arrival == datetime(2015, 9, 21, 15, 50)
-        assert stop_time_updates[3].departure == datetime(2015, 9, 21, 15, 51)
+        assert stop_time_updates[3].arrival == datetime(2015, 9, 21, 15, 48)
+        assert stop_time_updates[3].departure == datetime(2015, 9, 21, 15, 48)
 
 
 def test_cots_add_stop_time_without_delay():

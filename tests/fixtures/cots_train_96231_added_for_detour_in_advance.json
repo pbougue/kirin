@@ -193,13 +193,13 @@
                 "horaireProductionArrivee":{
                     "idFuseauHoraire":"Europe/Paris",
                     "heureIncertaine":false,
-                    "heureLocale":"17:45:00",
+                    "heureLocale":"17:51:00",
                     "nbJoursPasseMinuit":0
                 },
                 "horaireProductionDepart":{
                     "idFuseauHoraire":"Europe/Paris",
                     "heureIncertaine":false,
-                    "heureLocale":"17:46:00",
+                    "heureLocale":"17:50:00",
                     "nbJoursPasseMinuit":0
                 },
                 "horaireVoyageurArrivee":{
@@ -210,8 +210,8 @@
                     "statutCirculationOPE": "SUPPRESSION_DETOURNEMENT"
                 },
                 "horaireVoyageurDepart":{
-                    "dateHeure":"2015-09-21T15:53:00+0000",
-                    "heureLocale":"17:53:00",
+                    "dateHeure":"2015-09-21T15:50:00+0000",
+                    "heureLocale":"17:50:00",
                     "idFuseauHoraire":"Europe/Paris",
                     "nbJoursPasseMinuit":0,
                     "statutCirculationOPE": "SUPPRESSION_DETOURNEMENT"
@@ -241,25 +241,25 @@
                 "horaireProductionArrivee":{
                     "idFuseauHoraire":"Europe/Paris",
                     "heureIncertaine":false,
-                    "heureLocale":"17:51:00",
+                    "heureLocale":"17:48:00",
                     "nbJoursPasseMinuit":0
                 },
                 "horaireProductionDepart":{
                     "idFuseauHoraire":"Europe/Paris",
                     "heureIncertaine":false,
-                    "heureLocale":"17:53:00",
+                    "heureLocale":"17:48:00",
                     "nbJoursPasseMinuit":0
                 },
                 "horaireVoyageurArrivee":{
-                    "dateHeure":"2015-09-21T15:50:00+0000",
-                    "heureLocale":"17:50:00",
+                    "dateHeure":"2015-09-21T15:48:00+0000",
+                    "heureLocale":"17:48:00",
                     "idFuseauHoraire":"Europe/Paris",
                     "nbJoursPasseMinuit":0,
                     "statutCirculationOPE": "DETOURNEMENT"
                 },
                 "horaireVoyageurDepart":{
-                    "dateHeure":"2015-09-21T15:51:00+0000",
-                    "heureLocale":"17:51:00",
+                    "dateHeure":"2015-09-21T15:48:00+0000",
+                    "heureLocale":"17:48:00",
                     "idFuseauHoraire":"Europe/Paris",
                     "nbJoursPasseMinuit":0,
                     "statutCirculationOPE": "DETOURNEMENT"
