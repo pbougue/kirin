@@ -246,7 +246,7 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
         log_dict = {'log': log_str}
         record_internal_failure(log_dict['log'], contributor=self.contributor)
         log_dict.update({'contributor': self.contributor})
-        logger.info('metrology', extra=log_dict)
+        logger.info('internal failure', extra=log_dict)
 
     @staticmethod
     def _check_stop_time_consistency(last_stop_time_depart, projected_stop_time, pdp_code):
