@@ -282,18 +282,18 @@ def is_stop_event_served(event_name, stop_id, stop_order, nav_stop, db_tu, new_s
     :param new_stu: new StopTimeUpdate being process
     """
     # the new_stu prevails if provided
-    if new_stu is not None:
+    if new_stu:
         return not new_stu.is_stop_event_deleted(event_name)
     # 'undecided' if new_stu has no info about given stop, checking in previous TripUpdate
-    if db_tu is not None:
+    if db_tu:
         db_stu = db_tu.find_stop(stop_id, stop_order)
-        if db_stu is not None:
+        if db_stu:
             return not db_stu.is_stop_event_deleted(event_name)
         # 'undecided' if StopTime is not part of the TripUpdate (may happen if whole trip is deleted)
 
     # on navitia's VJ simply test that the time field is provided
     # TODO: check forbidden pickup/drop-off when Navitia provides info
-    if nav_stop is None:
+    if not nav_stop:
         return False
     event_time_field = 'utc_{}_time'.format(event_name)
     return event_time_field in nav_stop and nav_stop.get(event_time_field, None) is not None
@@ -313,14 +313,15 @@ def is_new_stop_event_valid(event_name, stop_id, stop_order, nav_stop, db_tu, ne
     :param new_stu: new StopTimeUpdate being process
     """
     # None is not considered valid (not worth iterating)
-    if new_stu is None:
+    if not new_stu:
         return False
 
     # Re-sending the same status is valid (COTS always re-send deleted or added stops)
-    if db_tu is not None:
+    if db_tu:
         db_stu = db_tu.find_stop(stop_id, stop_order)
-        if db_stu is not None and db_stu.get_stop_event_status(event_name) is not None and \
-                db_stu.get_stop_event_status(event_name) == new_stu.get_stop_event_status(event_name):
+        db_status = db_stu.get_stop_event_status(event_name)
+        new_status = new_stu.get_stop_event_status(event_name)
+        if db_stu and db_status is not None and db_status == new_status:
             return True
 
     is_added_new = new_stu.is_stop_event_added(event_name)
