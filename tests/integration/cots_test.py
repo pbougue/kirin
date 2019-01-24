@@ -792,7 +792,7 @@ def test_cots_added_stop_time_earlier_than_previous():
                'invalid cots: stop_point\'s(0087-713065-BV) time is not consistent'
 
 
-def test_cots_added_stop_time_with_dalays():
+def test_cots_added_stop_time_with_delays():
     """
     A new stop time is added in the VJ 96231 with a delay as explained below
 

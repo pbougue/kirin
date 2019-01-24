@@ -33,7 +33,6 @@ import datetime
 import logging
 import socket
 from collections import namedtuple
-from datetime import timedelta
 from dateutil import parser
 import pytz
 
@@ -218,7 +217,7 @@ def _get_datetime(utc_circulation_date, utc_time):
 def _get_update_info_of_stop_time(base_time, input_status, input_delay):
     new_time = None
     status = ModificationType.none.name
-    delay = timedelta(0)
+    delay = datetime.timedelta(0)
     if input_status == ModificationType.update.name:
         new_time = (base_time + input_delay) if base_time else None
         status = input_status
@@ -350,8 +349,8 @@ def is_new_stop_event_valid(event_name, stop_id, stop_order, nav_stop, db_tu, ne
 def make_fake_realtime_stop_time(order, sp_id, new_stu, db_trip_update):
     """
     Since the wanted stop_point doesn't exist in the base vj (for example, we want to delay/delete a stop_point
-    which is added by a previous disruption), we search the wanted stop_point in db first, if we cannot find it in
-    the db(for example, the very first 'add'), we use the info of new_stu
+    which is added by a previous disruption), we search the wanted stop_point in db first, if we cannot find it
+    in the db(for example, the very first 'add'), we use the info of new_stu
     """
     stu = db_trip_update.find_stop(sp_id, order) if db_trip_update else None
     utc_departure_time, utc_arrival_time = (stu.departure.time(), stu.arrival.time()) if stu else \
@@ -480,7 +479,7 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
             if utc_nav_arrival_time is not None:
                 if is_past_midnight(previous_stop_event, arrival_stop_event):
                     # last departure is after arrival, it's a past-midnight
-                    utc_circulation_date += timedelta(days=1)
+                    utc_circulation_date += datetime.timedelta(days=1)
                 base_arrival = _get_datetime(utc_circulation_date, utc_nav_arrival_time)
 
             # store arrival as previous stop-event
@@ -495,7 +494,7 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
             if utc_nav_departure_time is not None:
                 if is_past_midnight(previous_stop_event, departure_stop_event):
                     # departure is before arrival, it's a past-midnight
-                    utc_circulation_date += timedelta(days=1)
+                    utc_circulation_date += datetime.timedelta(days=1)
                 base_departure = _get_datetime(utc_circulation_date, utc_nav_departure_time)
 
             # store departure as previous stop-event
