@@ -413,10 +413,6 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
         res.stop_time_updates = []
         return res
 
-    last_stop_event_time = None
-    last_departure = None
-    utc_circulation_date = new_trip_update.vj.get_utc_circulation_date()
-
     def get_next_stop():
         if is_new_complete:
             # Iterate on the new trip update stop_times if it is complete (all stop_times present in it)
@@ -441,14 +437,22 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
             for order, vj_st in enumerate(navitia_vj.get('stop_times', [])):
                 yield order, vj_st
 
-    def is_past_midnight(circulation_date, stop_event1, stop_event2):
-        if stop_event1.time is None or stop_event2.time is None:
+    def is_past_midnight(prev_stop_event, next_stop_event):
+        if prev_stop_event.time is None or next_stop_event.time is None:
             return False
-        return (datetime.datetime.combine(circulation_date, stop_event1.time) + stop_event1.delay
-                > datetime.datetime.combine(circulation_date, stop_event2.time) + stop_event2.delay)
+        # it is not a pass-midnight if pure base-schedule is consistent
+        # (after delay it may be inconsistent but it is corrected later in the process)
+        # it is not a pass-midnight if after delay it is consistent
+        # (in case of stop add, comparing before delay is pointless)
+        date = datetime.date(1, 1, 1)
+        return (prev_stop_event.time > next_stop_event.time) and \
+               (datetime.datetime.combine(date, prev_stop_event.time) + prev_stop_event.delay
+                > datetime.datetime.combine(date, next_stop_event.time) + next_stop_event.delay)
 
     has_changes = False
     previous_stop_event = TimeDelayTuple(time=None, delay=None)
+    last_departure = None
+    utc_circulation_date = new_trip_update.vj.get_utc_circulation_date()
 
     for nav_order, navitia_stop in get_next_stop():
         if navitia_stop is None:
@@ -468,35 +472,34 @@ def merge(navitia_vj, db_trip_update, new_trip_update, is_new_complete=False):
         # considering only served arrival
         if is_stop_event_served(event_name='arrival', stop_id=stop_id, stop_order=nav_order,
                                 nav_stop=navitia_stop, db_tu=db_trip_update, new_stu=new_st):
+
+            arrival_delay = new_st.arrival_delay if (new_st and new_st.arrival_delay) \
+                            else datetime.timedelta(seconds=0)
+            arrival_stop_event = TimeDelayTuple(time=utc_nav_arrival_time, delay=arrival_delay)
             # For arrival we need to compare arrival time and delay with previous departure time and delay
             if utc_nav_arrival_time is not None:
-                arrival_delay = new_st.arrival_delay if new_st and new_st.arrival_delay \
-                    else datetime.timedelta(seconds=0)
-
-                if is_past_midnight(utc_circulation_date, previous_stop_event,
-                                    TimeDelayTuple(time=utc_nav_arrival_time, delay=arrival_delay)):
+                if is_past_midnight(previous_stop_event, arrival_stop_event):
                     # last departure is after arrival, it's a past-midnight
                     utc_circulation_date += timedelta(days=1)
                 base_arrival = _get_datetime(utc_circulation_date, utc_nav_arrival_time)
 
-            # store arrival as previous stop-event time
-            last_stop_event_time = utc_nav_arrival_time
+            # store arrival as previous stop-event
+            previous_stop_event = arrival_stop_event
 
         # considering only served departure (same logic as before)
         if is_stop_event_served(event_name='departure', stop_id=stop_id, stop_order=nav_order,
                                 nav_stop=navitia_stop, db_tu=db_trip_update, new_stu=new_st):
+            departure_delay = new_st.departure_delay if (new_st and new_st.departure_delay) \
+                              else datetime.timedelta(seconds=0)
+            departure_stop_event = TimeDelayTuple(time=utc_nav_departure_time, delay=departure_delay)
             if utc_nav_departure_time is not None:
-                if last_stop_event_time is not None and last_stop_event_time > utc_nav_departure_time:
+                if is_past_midnight(previous_stop_event, departure_stop_event):
                     # departure is before arrival, it's a past-midnight
                     utc_circulation_date += timedelta(days=1)
                 base_departure = _get_datetime(utc_circulation_date, utc_nav_departure_time)
 
-            # store departure as previous stop-event time
-            last_stop_event_time = utc_nav_departure_time
-            # store the departure time and delay to compare with next arrival time and delay
-            departure_delay = new_st.departure_delay if new_st and new_st.departure_delay \
-                else datetime.timedelta(seconds=0)
-            previous_stop_event = TimeDelayTuple(time=utc_nav_departure_time, delay=departure_delay)
+            # store departure as previous stop-event
+            previous_stop_event = departure_stop_event
 
         if db_trip_update is not None and new_st is not None:
             """
