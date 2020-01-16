@@ -234,7 +234,7 @@ def _is_fully_added_pdp(pdp):
             dep_arr_statuses.append(get_value(cots_traveler_time, "statutCirculationOPE", nullable=True))
 
     # if there are expressed cots_traveler_times and all are 'CREATION', pdp is fully added
-    return dep_arr_statuses and all(s == "CREATION" for s in dep_arr_statuses)
+    return dep_arr_statuses and all(s in ["CREATION", "DETOURNEMENT"] for s in dep_arr_statuses)
 
 
 def _get_first_stop_datetime(list_pdps, hour_obj_name, skip_fully_added_stops=True):
