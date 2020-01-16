@@ -847,8 +847,8 @@ def test_cots_added_and_deleted_stop_time():
         assert StopTimeUpdate.query.all()[3].departure_status == "add"
         assert StopTimeUpdate.query.all()[3].departure == datetime(2015, 9, 21, 16, 9)  # 16:04 + 5 min delay
         created_at_for_add = StopTimeUpdate.query.all()[3].created_at
-
     # At this point the trip_update is valid. Adding a new Stop_time in data base
+
     cots_deleted_file = get_fixture_data("cots_train_96231_deleted.json")
     res = api_post("/cots", data=cots_deleted_file)
     assert res == "OK"
@@ -856,15 +856,17 @@ def test_cots_added_and_deleted_stop_time():
         assert len(RealTimeUpdate.query.all()) == 3
         assert len(TripUpdate.query.all()) == 1
         assert TripUpdate.query.all()[0].status == "update"
-        assert TripUpdate.query.all()[0].effect == "REDUCED_SERVICE"
+        assert (
+            TripUpdate.query.all()[0].effect == "UNKNOWN_EFFECT"
+        )  # as deleted stop is not one of base-schedule
         assert TripUpdate.query.all()[0].company_id == "company:OCE:SN"
         assert len(StopTimeUpdate.query.all()) == 7
         assert StopTimeUpdate.query.all()[3].arrival_status == "delete"
         assert StopTimeUpdate.query.all()[3].departure_status == "delete"
 
         created_at_for_delete = StopTimeUpdate.query.all()[3].created_at
-
     # At this point the trip_update is valid. Stop_time recently added will be deleted.
+
     assert created_at_for_add != created_at_for_delete
 
     cots_deleted_file = get_fixture_data("cots_train_96231_deleted.json")
@@ -874,7 +876,9 @@ def test_cots_added_and_deleted_stop_time():
         assert len(RealTimeUpdate.query.all()) == 4
         assert len(TripUpdate.query.all()) == 1
         assert TripUpdate.query.all()[0].status == "update"
-        assert TripUpdate.query.all()[0].effect == "REDUCED_SERVICE"
+        assert (
+            TripUpdate.query.all()[0].effect == "UNKNOWN_EFFECT"
+        )  # as deleted stop is not one of base-schedule
         assert TripUpdate.query.all()[0].company_id == "company:OCE:SN"
         assert len(StopTimeUpdate.query.all()) == 7
         assert StopTimeUpdate.query.all()[3].arrival_status == "delete"
@@ -895,8 +899,8 @@ def test_cots_added_and_deleted_stop_time():
         # It has already been deleted, but it's allowed to send deleted once again.
         assert StopTimeUpdate.query.all()[3].created_at > created_at_for_delete
         db_trip_delayed = check_db_96231_delayed(contributor=COTS_CONTRIBUTOR)
-        # when delete and delays exist, effect=REDUCED_SERVICE, because REDUCED_SERVICE > SIGNIFICANT_DELAYS
-        assert db_trip_delayed.effect == "REDUCED_SERVICE"
+        assert db_trip_delayed.status == "update"
+        assert db_trip_delayed.effect == "SIGNIFICANT_DELAYS"  # as deleted stop is not one of base-schedule
         assert len(db_trip_delayed.stop_time_updates) == 7
 
 
@@ -930,7 +934,7 @@ def test_cots_added_stop_time_first_position_then_delete_it():
         assert len(RealTimeUpdate.query.all()) == 2
         assert len(TripUpdate.query.all()) == 1
         assert TripUpdate.query.all()[0].status == "update"
-        assert TripUpdate.query.all()[0].effect == "REDUCED_SERVICE"
+        assert TripUpdate.query.all()[0].effect == "UNKNOWN_EFFECT"
         assert TripUpdate.query.all()[0].company_id == "company:OCE:TH"
         assert TripUpdate.query.all()[0].physical_mode_id is None
         assert TripUpdate.query.all()[0].headsign is None

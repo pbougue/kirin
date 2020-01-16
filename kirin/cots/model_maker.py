@@ -520,10 +520,24 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
                         )
                     )
 
-                arr_dep_status = getattr(
+                stop_event_status = getattr(
                     st_update, _status_map[arrival_departure_toggle], ModificationType.none.name
                 )
-                highest_st_status = get_higher_status(highest_st_status, arr_dep_status)
+
+                # For trip status: ignore back-to-normal delete (stop-time that was not in base-schedule)
+                if stop_event_status == ModificationType.delete.name:
+                    # TODO: be more robust to cases with loops, or where stop order changes in RT.
+                    # Probably do a synchronized pass over realtime and base-schedule VJs
+                    vj_st, _ = get_navitia_stop_time_sncf(
+                        cr=get_value(pdp, "cr"),
+                        ci=get_value(pdp, "ci"),
+                        ch=get_value(pdp, "ch"),
+                        nav_vj=vj.navitia_vj,
+                    )
+                    if not vj_st:
+                        stop_event_status = ModificationType.none.name
+
+                highest_st_status = get_higher_status(highest_st_status, stop_event_status)
 
             self._check_stop_time_consistency(
                 last_stop_time_depart,
