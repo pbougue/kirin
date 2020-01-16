@@ -1,0 +1,265 @@
+{
+	"ressource": "courseOPE",
+	"mode": "modification",
+	"evt": ["PERTURBATION"],
+	"PdPObserveArrivee": [],
+	"PdPObserveDepart": [],
+	"PdPPronosticBrutArrivee": [],
+	"PdPPronosticBrutDepart": [],
+	"PdPPronosticIVArrivee": [],
+	"PdPPronosticIVDepart": [],
+	"PdPImpacteDepart": ["30aeb202-ac22-4d49-b6e7-7a20b282579f",
+	"62f6c51d-5685-4bd6-96f1-7e705aab1125",
+	"0042c560-acda-45a8-b4a3-398b7f805686",
+	"96ba8aaa-dc50-4f08-9da9-f3d39243c9a7",
+	"6cc75c0b-3664-4b56-9a33-6bf5349ae5fe",
+	"314ba1c6-42e7-49a3-ac60-53b55737134a",
+	"c12743ed-c02d-468b-a55e-b4c288fc9eab"],
+	"PdPImpacteArrivee": ["1a4baffb-e043-4b07-8a5c-8a4ec468cdd2",
+	"62f6c51d-5685-4bd6-96f1-7e705aab1125",
+	"0042c560-acda-45a8-b4a3-398b7f805686",
+	"96ba8aaa-dc50-4f08-9da9-f3d39243c9a7",
+	"6cc75c0b-3664-4b56-9a33-6bf5349ae5fe",
+	"314ba1c6-42e7-49a3-ac60-53b55737134a",
+	"c12743ed-c02d-468b-a55e-b4c288fc9eab"],
+	"nouvelleVersion": {
+		"codeCompagnieTransporteur": "1187",
+		"codeMarqueTransporteur": "TGV",
+		"codeRelation": "1",
+		"codeService": "A2018",
+		"codeSousRelation": "001200",
+		"codeTransporteurResponsable": "1N",
+		"codeTypeMoyenTransport": "0",
+		"coursePTA": {
+			"@id": "7ef94a59-05d6-4da3-acd8-09ab6b607beb"
+		},
+		"dateDebutService": "2017-12-10",
+		"dateDerniereModification": "2015-10-06T07:49:50+0000",
+		"dateFinService": "2018-12-08",
+		"estDiscontinue": false,
+		"estTechnique": false,
+		"estimationManuelle": false,
+		"etat": "ACTIVE",
+		"idVersion": "db1e8b70-9c8d-4320-b9f6-45c45a9b4e9d",
+		"identifiantDansSystemeCreateur": "a3ce8bfa-4fcd-4cc1-97f2-dfb94e742107",
+		"indicateurFer": "FERRE",
+		"listeCouplageCourseOPE": [{
+			"courseCouplee": {
+				"codeCompagnieTransporteur": "1187",
+				"dateCirculation": "2015-10-06",
+				"indicateurFer": "FERRE",
+				"numeroCourse": "5032",
+				"@id": "f7b2e08e-ced6-4f5d-86b5-8d34461da03b"
+			},
+			"pointDebutCouplage": {
+				"@id": "30aeb202-ac22-4d49-b6e7-7a20b282579f"
+			},
+			"pointFinCouplage": {
+				"@id": "1a4baffb-e043-4b07-8a5c-8a4ec468cdd2"
+			}
+		}],
+		"listeCodeTransporteurAssocie": [],
+		"listeEvenement": [],
+		"listeJourRegimeDApplication": [{
+			"date": "2015-10-06"
+		}],
+		"listeJourRegimeFacultatif": [],
+		"idMotifInterneReference": 1,
+		"listeMotif": [{
+			"dateHeureDeclaration": "2015-10-06T07:49:50+0000",
+			"idMotifInterne": 1,
+			"source": "IRE-GOP"
+		}],
+		"listePointDeParcours": [{
+			"@id": "30aeb202-ac22-4d49-b6e7-7a20b282579f",
+			"arretFacultatif": false,
+			"categorieStatistiqueDepart": "LVN",
+			"cr": "0087",
+			"ci": "686006",
+			"ch": "BV",
+			"horaireProductionDepart": {
+				"idFuseauHoraire": "Europe/Paris",
+				"heureIncertaine": false,
+				"heureLocale": "13:16:00",
+				"nbJoursPasseMinuit": 0
+			},
+			"horaireVoyageurDepart": {
+				"dateHeure": "2015-10-06T11:16:00+0000",
+				"heureLocale": "13:16:00",
+				"idFuseauHoraire": "Europe/Paris",
+				"nbJoursPasseMinuit": 0,
+				"statutCirculationOPE": "REACTIVATION"
+			},
+			"listeHoraireProjeteArrivee": [],
+			"listeHoraireProjeteDepart": [],
+			"listeMotifArrivee": [],
+			"listeMotifDepart": [],
+			"rang": 1,
+			"typeArret": "CH"
+		},
+		{
+			"@id": "96ba8aaa-dc50-4f08-9da9-f3d39243c9a7",
+			"arretFacultatif": false,
+			"categorieStatistiqueArrivee": "LVN",
+			"categorieStatistiqueDepart": "LVN",
+			"cr": "0087",
+			"ci": "318964",
+			"ch": "BV",
+			"horaireProductionArrivee": {
+				"idFuseauHoraire": "Europe/Paris",
+				"heureIncertaine": false,
+				"heureLocale": "15:56:00",
+				"nbJoursPasseMinuit": 0
+			},
+			"horaireProductionDepart": {
+				"idFuseauHoraire": "Europe/Paris",
+				"heureIncertaine": false,
+				"heureLocale": "15:59:00",
+				"nbJoursPasseMinuit": 0
+			},
+			"horaireVoyageurArrivee": {
+				"dateHeure": "2015-10-06T13:56:00+0000",
+				"heureLocale": "15:56:00",
+				"idFuseauHoraire": "Europe/Paris",
+				"nbJoursPasseMinuit": 0,
+				"statutCirculationOPE": "REACTIVATION"
+			},
+			"horaireVoyageurDepart": {
+				"dateHeure": "2015-10-06T13:59:00+0000",
+				"heureLocale": "15:59:00",
+				"idFuseauHoraire": "Europe/Paris",
+				"nbJoursPasseMinuit": 0,
+				"statutCirculationOPE": "SUPPRESSION"
+			},
+			"listeHoraireProjeteArrivee": [],
+			"listeHoraireProjeteDepart": [],
+			"listeMotifArrivee": [],
+			"listeMotifDepart": [],
+			"rang": 2,
+			"typeArret": "CH"
+		},
+		{
+			"@id": "c12743ed-c02d-468b-a55e-b4c288fc9eab",
+			"arretFacultatif": false,
+			"categorieStatistiqueArrivee": "LVN",
+			"categorieStatistiqueDepart": "LVN",
+			"cr": "0087",
+			"ci": "319012",
+			"ch": "00",
+			"horaireProductionArrivee": {
+				"idFuseauHoraire": "Europe/Paris",
+				"heureIncertaine": false,
+				"heureLocale": "16:19:00",
+				"nbJoursPasseMinuit": 0
+			},
+			"horaireProductionDepart": {
+				"idFuseauHoraire": "Europe/Paris",
+				"heureIncertaine": false,
+				"heureLocale": "16:22:00",
+				"nbJoursPasseMinuit": 0
+			},
+			"horaireVoyageurArrivee": {
+				"dateHeure": "2015-10-06T14:19:00+0000",
+				"heureLocale": "16:19:00",
+				"idFuseauHoraire": "Europe/Paris",
+				"nbJoursPasseMinuit": 0,
+				"statutCirculationOPE": "SUPPRESSION"
+			},
+			"horaireVoyageurDepart": {
+				"dateHeure": "2015-10-06T14:22:00+0000",
+				"heureLocale": "16:22:00",
+				"idFuseauHoraire": "Europe/Paris",
+				"nbJoursPasseMinuit": 0,
+				"statutCirculationOPE": "SUPPRESSION"
+			},
+			"listeHoraireProjeteArrivee": [],
+			"listeHoraireProjeteDepart": [],
+			"listeMotifArrivee": [],
+			"listeMotifDepart": [],
+			"rang": 3,
+			"typeArret": "CH"
+		},
+		{
+			"@id": "0042c560-acda-45a8-b4a3-398b7f805686",
+			"arretFacultatif": false,
+			"categorieStatistiqueArrivee": "LVN",
+			"categorieStatistiqueDepart": "LVN",
+			"cr": "0087",
+			"ci": "751008",
+			"ch": "BV",
+			"horaireProductionArrivee": {
+				"idFuseauHoraire": "Europe/Paris",
+				"heureIncertaine": false,
+				"heureLocale": "16:34:00",
+				"nbJoursPasseMinuit": 0
+			},
+			"horaireVoyageurArrivee": {
+				"dateHeure": "2015-10-06T14:34:00+0000",
+				"heureLocale": "16:34:00",
+				"idFuseauHoraire": "Europe/Paris",
+				"nbJoursPasseMinuit": 0,
+				"statutCirculationOPE": "SUPPRESSION"
+			},
+			"listeHoraireProjeteArrivee": [],
+			"listeMotifArrivee": [],
+			"rang": 4,
+			"typeArret": "CH"
+		}],
+		"listeService": [{
+			"code": "CS01",
+			"listeJourRegimeDApplication": [{
+				"date": "2015-10-06"
+			}],
+			"listePropriete": [{
+				"code": "CP001",
+				"metaPropriete": {
+					"@id": "95352652-200c-430b-8a94-3852677c91ea"
+				},
+				"valeurChaine": "D"
+			},
+			{
+				"code": "CP002",
+				"metaPropriete": {
+					"@id": "350d89f9-8667-4456-9186-765ce07ea238"
+				},
+				"valeurChaine": "O"
+			}],
+			"metaService": {
+				"@id": "590ecf63-8dcc-46d5-b238-391fd681eba1"
+			},
+			"pointDeParcoursDebut": {
+				"@id": "30aeb202-ac22-4d49-b6e7-7a20b282579f"
+			},
+			"pointDeParcoursFin": {
+				"@id": "1a4baffb-e043-4b07-8a5c-8a4ec468cdd2"
+			}
+		}],
+		"listeSubstitutionCourse": [],
+		"listeUtilisationSillon": [{
+			"identifiantSillon": {
+				"numeroOperationnelSillon": "006113",
+				"sillonTTH": "042521690015"
+			},
+			"listeJourRegimeDApplication": [{
+				"date": "2015-10-06"
+			}],
+			"listeJourRegimeFacultatif": [],
+			"pointDebutUtilisationSillon": {
+				"@id": "30aeb202-ac22-4d49-b6e7-7a20b282579f"
+			},
+			"pointFinUtilisationSillon": {
+				"@id": "1a4baffb-e043-4b07-8a5c-8a4ec468cdd2"
+			},
+			"porteur": true,
+			"rangPRDebutUtilisationSillon": 1,
+			"decalagePasseMinuit": 0,
+			"rangPRFinUtilisationSillon": 133
+		}],
+		"numeroCourse": "006113",
+		"statutSillonCourse": "NON_CONNU",
+		"statutOperationnel": "PERTURBEE",
+		"systemeCreateur": "2148",
+		"type": "COURSE_OPE",
+		"@id": "a3ce8bfa-4fcd-4cc1-97f2-dfb94e742107"
+	}
+}

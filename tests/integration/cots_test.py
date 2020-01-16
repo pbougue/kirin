@@ -466,7 +466,7 @@ def test_cots_trip_with_parity(mock_rabbitmq):
 
 def test_cots_trip_removal_reactivation_delay(mock_rabbitmq):
     """
-    trip removal, then reactivation, then delay
+    trip removal, then reactivation, then delay on all stops, then add a stop (with delay too)
     """
     cots_6113 = get_fixture_data("cots_train_6113_trip_removal.json")
     res = api_post("/cots", data=cots_6113)
@@ -534,6 +534,246 @@ def test_cots_trip_removal_reactivation_delay(mock_rabbitmq):
             if i < 3:
                 assert s.departure_status == "update"
                 assert s.departure_delay == timedelta(minutes=10)
+
+    react_delay_6113 = get_fixture_data("cots_train_6113_trip_reactivation_delay_add_stop.json")
+    res = api_post("/cots", data=react_delay_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 4
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 5
+
+        db_trip_react = TripUpdate.find_by_dated_vj(
+            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+        )
+        assert db_trip_react
+
+        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+        assert db_trip_react.vj_id == db_trip_react.vj.id
+        assert db_trip_react.status == "update"
+        assert db_trip_react.effect == "MODIFIED_SERVICE"
+        assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+        assert len(db_trip_react.stop_time_updates) == 5
+        for i, s in enumerate(db_trip_react.stop_time_updates):
+            if i > 0 and i != 3:
+                assert s.arrival_status == "update"
+                assert s.arrival_delay == timedelta(minutes=10)
+            if i < 3 and i != 3:
+                assert s.departure_status == "update"
+                assert s.departure_delay == timedelta(minutes=10)
+
+        s = db_trip_react.stop_time_updates[3]
+        assert s.arrival_status == "add"
+        assert s.arrival == datetime(2015, 10, 6, 14, 36)
+        assert s.departure_status == "add"
+        assert s.departure == datetime(2015, 10, 6, 14, 38)
+        assert s.message is None
+
+    assert mock_rabbitmq.call_count == 4
+
+
+def test_cots_trip_removal_reactivation_add_stop(mock_rabbitmq):
+    """
+    trip removal, then reactivation, then add a stop, then add delay on all stops
+    """
+    cots_6113 = get_fixture_data("cots_train_6113_trip_removal.json")
+    res = api_post("/cots", data=cots_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 1
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 0
+    check_db_6113_trip_removal()
+
+    react_6113 = get_fixture_data("cots_train_6113_trip_reactivation.json")
+    res = api_post("/cots", data=react_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 4
+
+        db_trip_react = TripUpdate.find_by_dated_vj(
+            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+        )
+        assert db_trip_react
+
+        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+        assert db_trip_react.vj_id == db_trip_react.vj.id
+        assert db_trip_react.status == "update"
+        assert db_trip_react.effect == "UNKNOWN_EFFECT"
+        assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+        assert len(db_trip_react.stop_time_updates) == 4
+        for s in db_trip_react.stop_time_updates:
+            assert s.arrival_status == "none"
+            assert s.departure_status == "none"
+            assert s.message is None
+
+    react_delay_6113 = get_fixture_data("cots_train_6113_trip_reactivation_add_stop.json")
+    res = api_post("/cots", data=react_delay_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 3
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 5
+
+        db_trip_react = TripUpdate.find_by_dated_vj(
+            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+        )
+        assert db_trip_react
+
+        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+        assert db_trip_react.vj_id == db_trip_react.vj.id
+        assert db_trip_react.status == "update"
+        assert db_trip_react.effect == "MODIFIED_SERVICE"
+        assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+        assert len(db_trip_react.stop_time_updates) == 5
+        for i, s in enumerate(db_trip_react.stop_time_updates):
+            if i != 3:
+                assert s.arrival_status == "none"
+                assert s.departure_status == "none"
+                assert s.message is None
+
+        s = db_trip_react.stop_time_updates[3]
+        assert s.arrival_status == "add"
+        assert s.arrival == datetime(2015, 10, 6, 14, 26)
+        assert s.departure_status == "add"
+        assert s.departure == datetime(2015, 10, 6, 14, 28)
+        assert s.message is None
+
+    react_delay_6113 = get_fixture_data("cots_train_6113_trip_reactivation_delay_add_stop.json")
+    res = api_post("/cots", data=react_delay_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 4
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 5
+
+        db_trip_react = TripUpdate.find_by_dated_vj(
+            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+        )
+        assert db_trip_react
+
+        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+        assert db_trip_react.vj_id == db_trip_react.vj.id
+        assert db_trip_react.status == "update"
+        assert db_trip_react.effect == "MODIFIED_SERVICE"
+        assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+        assert len(db_trip_react.stop_time_updates) == 5
+        for i, s in enumerate(db_trip_react.stop_time_updates):
+            if i > 0 and i != 3:
+                assert s.arrival_status == "update"
+                assert s.arrival_delay == timedelta(minutes=10)
+            if i < 3 and i != 3:
+                assert s.departure_status == "update"
+                assert s.departure_delay == timedelta(minutes=10)
+
+        s = db_trip_react.stop_time_updates[3]
+        assert s.arrival_status == "add"
+        assert s.arrival == datetime(2015, 10, 6, 14, 36)
+        assert s.departure_status == "add"
+        assert s.departure == datetime(2015, 10, 6, 14, 38)
+        assert s.message is None
+
+    assert mock_rabbitmq.call_count == 4
+
+
+def test_cots_trip_removal_reactivation_remove_stops(mock_rabbitmq):
+    """
+    trip removal, then reactivation, then remove stops
+    """
+    cots_6113 = get_fixture_data("cots_train_6113_trip_removal.json")
+    res = api_post("/cots", data=cots_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 1
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 0
+    check_db_6113_trip_removal()
+
+    react_6113 = get_fixture_data("cots_train_6113_trip_reactivation.json")
+    res = api_post("/cots", data=react_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 4
+
+        db_trip_react = TripUpdate.find_by_dated_vj(
+            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+        )
+        assert db_trip_react
+
+        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+        assert db_trip_react.vj_id == db_trip_react.vj.id
+        assert db_trip_react.status == "update"
+        assert db_trip_react.effect == "UNKNOWN_EFFECT"
+        assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+        assert len(db_trip_react.stop_time_updates) == 4
+        for s in db_trip_react.stop_time_updates:
+            assert s.arrival_status == "none"
+            assert s.departure_status == "none"
+            assert s.message is None
+
+    react_delay_6113 = get_fixture_data("cots_train_6113_trip_reactivation_remove_stops.json")
+    res = api_post("/cots", data=react_delay_6113)
+    assert res == "OK"
+
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 3
+        assert len(TripUpdate.query.all()) == 1
+        assert len(StopTimeUpdate.query.all()) == 4
+
+        db_trip_react = TripUpdate.find_by_dated_vj(
+            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+        )
+        assert db_trip_react
+
+        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+        assert db_trip_react.vj_id == db_trip_react.vj.id
+        assert db_trip_react.status == "update"
+        assert db_trip_react.effect == "REDUCED_SERVICE"
+        assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+        assert len(db_trip_react.stop_time_updates) == 4
+
+        s = db_trip_react.stop_time_updates[0]
+        assert s.arrival_status == "none"
+        assert s.departure_status == "none"
+        assert s.message is None
+
+        s = db_trip_react.stop_time_updates[1]
+        assert s.arrival_status == "none"
+        assert s.departure_status == "delete"
+        assert s.message is None
+
+        s = db_trip_react.stop_time_updates[2]
+        assert s.arrival_status == "delete"
+        assert s.departure_status == "delete"
+        assert s.message is None
+
+        s = db_trip_react.stop_time_updates[3]
+        assert s.arrival_status == "delete"
+        assert s.departure_status == "none"
+        assert s.message is None
 
     assert mock_rabbitmq.call_count == 3
 
@@ -969,9 +1209,10 @@ def test_cots_added_stop_time_last_position():
         assert StopTimeUpdate.query.all()[6].departure == datetime(2015, 9, 21, 16, 50)
 
 
-def test_cots_for_detour():
+def test_cots_for_detour_reactivation():
     """
     A new stop time is added for detour in the VJ 96231 at position 3
+    Then back to normal feed: reactivation of original stop and removal of the one previously added for detour.
     """
     cots_add_file = get_fixture_data("cots_train_96231_added_for_detour.json")
     res = api_post("/cots", data=cots_add_file)
@@ -990,6 +1231,95 @@ def test_cots_for_detour():
         assert stop_time_updates[3].arrival_status == "added_for_detour"
         assert stop_time_updates[3].arrival == datetime(2015, 9, 21, 15, 58)
         assert stop_time_updates[3].departure == datetime(2015, 9, 21, 15, 58)
+
+    cots_add_file = get_fixture_data("cots_train_96231_detour_reactivation_back_to_normal.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        assert len(TripUpdate.query.all()) == 1
+        assert TripUpdate.query.all()[0].status == "update"
+        assert TripUpdate.query.all()[0].effect == "UNKNOWN_EFFECT"
+        stop_time_updates = TripUpdate.query.all()[0].stop_time_updates
+        assert len(stop_time_updates) == 7
+        assert stop_time_updates[2].departure_status == "none"
+        assert stop_time_updates[2].arrival_status == "none"
+        assert stop_time_updates[2].arrival == datetime(2015, 9, 21, 15, 51)
+        assert stop_time_updates[2].departure == datetime(2015, 9, 21, 15, 53)
+
+        assert stop_time_updates[3].departure_status == "delete"
+        assert stop_time_updates[3].arrival_status == "delete"
+
+
+def test_cots_for_detour_add_stop_reactivation():
+    """
+    A new stop time is added for detour in the VJ 96231 at position 3
+    Then an other stop is added (pure creation)
+    Then back to normal feed on detour (still one stop created)
+    """
+    cots_add_file = get_fixture_data("cots_train_96231_added_for_detour.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 1
+        assert len(TripUpdate.query.all()) == 1
+        assert TripUpdate.query.all()[0].status == "update"
+        assert TripUpdate.query.all()[0].effect == "DETOUR"
+        stop_time_updates = TripUpdate.query.all()[0].stop_time_updates
+        assert len(stop_time_updates) == 7
+        assert stop_time_updates[2].departure_status == "deleted_for_detour"
+        assert stop_time_updates[2].arrival_status == "deleted_for_detour"
+
+        assert stop_time_updates[3].departure_status == "added_for_detour"
+        assert stop_time_updates[3].arrival_status == "added_for_detour"
+        assert stop_time_updates[3].arrival == datetime(2015, 9, 21, 15, 58)
+        assert stop_time_updates[3].departure == datetime(2015, 9, 21, 15, 58)
+
+    cots_add_file = get_fixture_data("cots_train_96231_added_for_detour_and_add_stop.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        assert len(TripUpdate.query.all()) == 1
+        assert TripUpdate.query.all()[0].status == "update"
+        assert TripUpdate.query.all()[0].effect == "DETOUR"
+        stop_time_updates = TripUpdate.query.all()[0].stop_time_updates
+        assert len(stop_time_updates) == 8
+        assert stop_time_updates[2].departure_status == "deleted_for_detour"
+        assert stop_time_updates[2].arrival_status == "deleted_for_detour"
+
+        assert stop_time_updates[3].departure_status == "added_for_detour"
+        assert stop_time_updates[3].arrival_status == "added_for_detour"
+        assert stop_time_updates[3].arrival == datetime(2015, 9, 21, 15, 58)
+        assert stop_time_updates[3].departure == datetime(2015, 9, 21, 15, 58)
+
+        assert stop_time_updates[5].departure_status == "add"
+        assert stop_time_updates[5].arrival_status == "add"
+        assert stop_time_updates[5].arrival == datetime(2015, 9, 21, 16, 22)
+        assert stop_time_updates[5].departure == datetime(2015, 9, 21, 16, 23)
+
+    cots_add_file = get_fixture_data("cots_train_96231_detour_reactivation_back_to_normal_add_stop.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 3
+        assert len(TripUpdate.query.all()) == 1
+        assert TripUpdate.query.all()[0].status == "update"
+        assert TripUpdate.query.all()[0].effect == "MODIFIED_SERVICE"
+        stop_time_updates = TripUpdate.query.all()[0].stop_time_updates
+        assert len(stop_time_updates) == 8
+        assert stop_time_updates[2].departure_status == "none"
+        assert stop_time_updates[2].arrival_status == "none"
+        assert stop_time_updates[2].arrival == datetime(2015, 9, 21, 15, 51)
+        assert stop_time_updates[2].departure == datetime(2015, 9, 21, 15, 53)
+
+        assert stop_time_updates[3].departure_status == "delete"
+        assert stop_time_updates[3].arrival_status == "delete"
+
+        assert stop_time_updates[5].departure_status == "add"
+        assert stop_time_updates[5].arrival_status == "add"
+        assert stop_time_updates[5].arrival == datetime(2015, 9, 21, 16, 22)
+        assert stop_time_updates[5].departure == datetime(2015, 9, 21, 16, 23)
 
 
 def test_cots_for_detour_in_advance():
