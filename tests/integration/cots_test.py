@@ -1771,6 +1771,7 @@ def test_cots_for_added_trip_chain_type_3():
     2. Trip modified with 15 minutes delay in each stop_times
     3. Trip modified with a new stop_time added in the above flux cots
     4. Delete the trip with "statutCirculationOPE": "SUPPRESSION" in all stop_times
+    5. Re-add the trip with "statutCirculationOPE": "CREATION" in all stop_times and "statutOperationnel": "AJOUTEE"
     """
     cots_add_file = get_fixture_data("cots_train_151515_added_trip.json")
     res = api_post("/cots", data=cots_add_file)
@@ -1805,6 +1806,13 @@ def test_cots_for_added_trip_chain_type_3():
         assert trips[0].company_id == "company:OCE:SN"
         stop_times = StopTimeUpdate.query.all()
         assert len(stop_times) == 0
+
+    cots_add_file = get_fixture_data("cots_train_151515_readded_trip_with_delay_and_stop_time_added.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 5
+        check_add_trip_151515_with_delay_and_an_add()
 
 
 def test_cots_for_added_trip_chain_delete_stops_readd_stops():
