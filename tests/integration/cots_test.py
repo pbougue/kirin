@@ -1807,6 +1807,57 @@ def test_cots_for_added_trip_chain_type_3():
         assert len(stop_times) == 0
 
 
+def test_cots_for_added_trip_chain_delete_stops_readd_stops():
+    """
+    1. A simple trip add with 5 stop_times all existing in navitia
+    2. Last 2 stops are deleted (and departure from the one before)
+    3. Deleted stops are re-added
+    """
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 1
+        check_add_trip_151515()
+
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip_delete_stops.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        trips = TripUpdate.query.all()
+        assert len(trips) == 1
+        assert trips[0].status == "add"
+        assert trips[0].effect == "ADDITIONAL_SERVICE"
+        assert trips[0].company_id == "company:OCE:SN"
+        assert trips[0].physical_mode_id == "physical_mode:LongDistanceTrain"
+        assert trips[0].headsign == "151515"
+        stop_times = StopTimeUpdate.query.all()
+        assert len(stop_times) == 5
+        assert stop_times[0].arrival_status == "none"
+        assert stop_times[0].arrival == datetime(2012, 11, 20, 11, 00)
+        assert stop_times[0].departure_status == "add"
+        assert stop_times[0].departure == datetime(2012, 11, 20, 11, 00)
+        assert stop_times[1].arrival_status == "add"
+        assert stop_times[1].arrival == datetime(2012, 11, 20, 12, 00)
+        assert stop_times[1].departure_status == "add"
+        assert stop_times[1].departure == datetime(2012, 11, 20, 12, 10)
+        assert stop_times[2].arrival_status == "add"
+        assert stop_times[2].arrival == datetime(2012, 11, 20, 14, 00)
+        assert stop_times[2].departure_status == "delete"
+        assert stop_times[3].arrival_status == "delete"
+        assert stop_times[3].departure_status == "delete"
+        assert stop_times[4].arrival_status == "delete"
+        assert stop_times[4].departure_status == "none"
+
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip_readd_stops.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 3
+        check_add_trip_151515()
+
+
 def test_cots_add_same_trip_more_than_once():
     """
      1. A simple trip add with 5 stop_times all existing in navitia
