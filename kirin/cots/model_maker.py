@@ -375,6 +375,21 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
         if not (projected_departure >= projected_arrival >= last_stop_time_depart):
             raise InvalidArguments("invalid cots: stop_point's({}) time is not consistent".format(pdp_code))
 
+    @staticmethod
+    def _process_highest_status(highest_st_status, stop_event_status, pdp, navitia_vj):
+        # Back-to-normal stop-delete (delete stop-time that was not in base-schedule) is
+        # considered "normal", not "deleted".
+        if stop_event_status == ModificationType.delete.name:
+            # TODO: be more robust to cases with loops, or where stop order changes in RT.
+            # Probably do a synchronized pass over realtime and base-schedule VJs
+            vj_st, _ = get_navitia_stop_time_sncf(
+                cr=get_value(pdp, "cr"), ci=get_value(pdp, "ci"), ch=get_value(pdp, "ch"), nav_vj=navitia_vj
+            )
+            if not vj_st:
+                return get_higher_status(highest_st_status, ModificationType.none.name)
+
+        return get_higher_status(highest_st_status, stop_event_status)
+
     def _make_trip_update(self, json_train, vj, action_on_trip=ActionOnTrip.NOT_ADDED.name):
         """
         create the new TripUpdate object
@@ -524,20 +539,10 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
                     st_update, _status_map[arrival_departure_toggle], ModificationType.none.name
                 )
 
-                # For trip status: ignore back-to-normal delete (stop-time that was not in base-schedule)
-                if stop_event_status == ModificationType.delete.name:
-                    # TODO: be more robust to cases with loops, or where stop order changes in RT.
-                    # Probably do a synchronized pass over realtime and base-schedule VJs
-                    vj_st, _ = get_navitia_stop_time_sncf(
-                        cr=get_value(pdp, "cr"),
-                        ci=get_value(pdp, "ci"),
-                        ch=get_value(pdp, "ch"),
-                        nav_vj=vj.navitia_vj,
-                    )
-                    if not vj_st:
-                        stop_event_status = ModificationType.none.name
-
-                highest_st_status = get_higher_status(highest_st_status, stop_event_status)
+                # Manage resulting trip-status: process highest stop-status
+                highest_st_status = self._process_highest_status(
+                    highest_st_status, stop_event_status, pdp, vj.navitia_vj
+                )
 
             self._check_stop_time_consistency(
                 last_stop_time_depart,
