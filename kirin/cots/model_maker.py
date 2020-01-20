@@ -247,6 +247,27 @@ def _get_first_stop_datetime(list_pdps, hour_obj_name, skip_fully_added_stops=Tr
     return as_utc_naive_dt(str_time) if str_time else None
 
 
+def _is_full_reactivation_trip(pdps, cots_trip_status):
+    """
+    Determine if a COTS feed is a full REACTIVATION feed
+    This means that the trip is considered fully re-added.
+    To be confirmed that no corresponding base-schedule trip exists and
+    that a corresponding trip was previously added.
+    :param pdps: COTS list PointDeParcours
+    :param cots_trip_status: COTS trip status
+    :return: True if the trip is most probably fully reactivated
+    """
+    if cots_trip_status == TripStatus.PERTURBEE.name:
+        stop_statuses = [p.get("horaireVoyageurDepart", {}).get("statutCirculationOPE") for p in pdps[:-1]]
+        stop_statuses.extend([p.get("horaireVoyageurArrivee", {}).get("statutCirculationOPE") for p in pdps[1:]])
+        if (
+            all(s in ["REACTIVATION", "CREATION", "SUPPRESSION"] for s in stop_statuses)
+            and "REACTIVATION" in stop_statuses
+        ):
+            return True
+    return False
+
+
 def _get_action_on_trip(train_numbers, dict_version, pdps):
     """
     Verify if trip in cots feed is a newly added one and check possible actions
@@ -265,6 +286,8 @@ def _get_action_on_trip(train_numbers, dict_version, pdps):
         train_id, start_date=vj_start - SNCF_SEARCH_MARGIN, end_date=vj_end + SNCF_SEARCH_MARGIN
     )
 
+    is_full_reactivation = _is_full_reactivation_trip(pdps, cots_trip_status)
+
     action_on_trip = ActionOnTrip.NOT_ADDED.name
     if trip_added_in_db:
         # Raise exception on forbidden / inconsistent actions
@@ -276,15 +299,15 @@ def _get_action_on_trip(train_numbers, dict_version, pdps):
             )
         elif (
             cots_trip_status != TripStatus.AJOUTEE.name
+            and not is_full_reactivation
             and trip_added_in_db.status == ModificationType.delete.name
         ):
             raise InvalidArguments("Invalid action, trip {} already deleted in database".format(train_numbers))
 
         # Trip added then deleted followed by add should be handled as FIRST_TIME_ADDED
         if (
-            cots_trip_status == TripStatus.AJOUTEE.name
-            and trip_added_in_db.status == ModificationType.delete.name
-        ):
+            cots_trip_status == TripStatus.AJOUTEE.name or is_full_reactivation
+        ) and trip_added_in_db.status == ModificationType.delete.name:
             action_on_trip = ActionOnTrip.FIRST_TIME_ADDED.name
         # Trip already added should be handled as PREVIOUSLY_ADDED
         elif trip_added_in_db.status == ModificationType.add.name:

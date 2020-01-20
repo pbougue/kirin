@@ -1841,6 +1841,26 @@ def test_cots_for_added_trip_chain_type_3():
         assert len(RealTimeUpdate.query.all()) == 5
         check_add_trip_151515_with_delay_and_an_add()
 
+    cots_add_file = get_fixture_data("cots_train_151515_deleted_trip_with_delay_and_stop_time_added.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 6
+        trips = TripUpdate.query.all()
+        assert len(trips) == 1
+        assert trips[0].status == "delete"
+        assert trips[0].effect == "NO_SERVICE"
+        assert trips[0].company_id == "company:OCE:SN"
+        stop_times = StopTimeUpdate.query.all()
+        assert len(stop_times) == 0
+
+    cots_add_file = get_fixture_data("cots_train_151515_reactivated_trip_with_delay_and_stop_time_added.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 7
+        check_add_trip_151515_with_delay_and_an_add()
+
 
 def test_cots_for_added_trip_chain_delete_readd_stops_delete_reactivate_stops():
     """
