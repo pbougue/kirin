@@ -1698,6 +1698,33 @@ def check_add_trip_151515_with_delay_and_an_add():
     assert stop_time[5].departure == datetime(2012, 11, 20, 16, 15)
 
 
+def check_add_trip_with_last_2_stops_deleted():
+    trips = TripUpdate.query.all()
+    assert len(trips) == 1
+    assert trips[0].status == "add"
+    assert trips[0].effect == "ADDITIONAL_SERVICE"
+    assert trips[0].company_id == "company:OCE:SN"
+    assert trips[0].physical_mode_id == "physical_mode:LongDistanceTrain"
+    assert trips[0].headsign == "151515"
+    stop_times = StopTimeUpdate.query.all()
+    assert len(stop_times) == 5
+    assert stop_times[0].arrival_status == "none"
+    assert stop_times[0].arrival == datetime(2012, 11, 20, 11, 00)
+    assert stop_times[0].departure_status == "add"
+    assert stop_times[0].departure == datetime(2012, 11, 20, 11, 00)
+    assert stop_times[1].arrival_status == "add"
+    assert stop_times[1].arrival == datetime(2012, 11, 20, 12, 00)
+    assert stop_times[1].departure_status == "add"
+    assert stop_times[1].departure == datetime(2012, 11, 20, 12, 10)
+    assert stop_times[2].arrival_status == "add"
+    assert stop_times[2].arrival == datetime(2012, 11, 20, 14, 00)
+    assert stop_times[2].departure_status == "delete"
+    assert stop_times[3].arrival_status == "delete"
+    assert stop_times[3].departure_status == "delete"
+    assert stop_times[4].arrival_status == "delete"
+    assert stop_times[4].departure_status == "none"
+
+
 def test_cots_for_added_trip_chain_type_1():
     """
     Test for case 11 from the file "Enchainement Cas_API_20181010.xlsx"
@@ -1815,11 +1842,13 @@ def test_cots_for_added_trip_chain_type_3():
         check_add_trip_151515_with_delay_and_an_add()
 
 
-def test_cots_for_added_trip_chain_delete_stops_readd_stops():
+def test_cots_for_added_trip_chain_delete_readd_stops_delete_reactivate_stops():
     """
     1. A simple trip add with 5 stop_times all existing in navitia
     2. Last 2 stops are deleted (and departure from the one before)
     3. Deleted stops are re-added
+    4. Last 2 stops are re-deleted (same feed)
+    5. Deleted stops are reactivated: the status name is the only difference with re-add, the result must be identical
     """
     cots_add_file = get_fixture_data("cots_train_151515_added_trip.json")
     res = api_post("/cots", data=cots_add_file)
@@ -1833,36 +1862,27 @@ def test_cots_for_added_trip_chain_delete_stops_readd_stops():
     assert res == "OK"
     with app.app_context():
         assert len(RealTimeUpdate.query.all()) == 2
-        trips = TripUpdate.query.all()
-        assert len(trips) == 1
-        assert trips[0].status == "add"
-        assert trips[0].effect == "ADDITIONAL_SERVICE"
-        assert trips[0].company_id == "company:OCE:SN"
-        assert trips[0].physical_mode_id == "physical_mode:LongDistanceTrain"
-        assert trips[0].headsign == "151515"
-        stop_times = StopTimeUpdate.query.all()
-        assert len(stop_times) == 5
-        assert stop_times[0].arrival_status == "none"
-        assert stop_times[0].arrival == datetime(2012, 11, 20, 11, 00)
-        assert stop_times[0].departure_status == "add"
-        assert stop_times[0].departure == datetime(2012, 11, 20, 11, 00)
-        assert stop_times[1].arrival_status == "add"
-        assert stop_times[1].arrival == datetime(2012, 11, 20, 12, 00)
-        assert stop_times[1].departure_status == "add"
-        assert stop_times[1].departure == datetime(2012, 11, 20, 12, 10)
-        assert stop_times[2].arrival_status == "add"
-        assert stop_times[2].arrival == datetime(2012, 11, 20, 14, 00)
-        assert stop_times[2].departure_status == "delete"
-        assert stop_times[3].arrival_status == "delete"
-        assert stop_times[3].departure_status == "delete"
-        assert stop_times[4].arrival_status == "delete"
-        assert stop_times[4].departure_status == "none"
+        check_add_trip_with_last_2_stops_deleted()
 
     cots_add_file = get_fixture_data("cots_train_151515_added_trip_readd_stops.json")
     res = api_post("/cots", data=cots_add_file)
     assert res == "OK"
     with app.app_context():
         assert len(RealTimeUpdate.query.all()) == 3
+        check_add_trip_151515()
+
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip_delete_stops.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 4
+        check_add_trip_with_last_2_stops_deleted()
+
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip_reactivate_stops.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 5
         check_add_trip_151515()
 
 

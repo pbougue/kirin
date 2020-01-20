@@ -296,6 +296,17 @@ def _get_action_on_trip(train_numbers, dict_version, pdps):
     return action_on_trip
 
 
+def _is_pdp_in_navitia_vj(pdp, navitia_vj):
+    # TODO: be more robust to cases with loops, or where stop order changes in RT.
+    # Probably do a synchronized pass over realtime and base-schedule VJs
+    vj_st, _ = get_navitia_stop_time_sncf(
+        cr=get_value(pdp, "cr"), ci=get_value(pdp, "ci"), ch=get_value(pdp, "ch"), nav_vj=navitia_vj
+    )
+    if vj_st:
+        return True
+    return False
+
+
 class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
     def __init__(self, nav, contributor):
         super(KirinModelBuilder, self).__init__(nav, contributor)
@@ -376,17 +387,11 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
             raise InvalidArguments("invalid cots: stop_point's({}) time is not consistent".format(pdp_code))
 
     @staticmethod
-    def _process_highest_status(highest_st_status, stop_event_status, pdp, navitia_vj):
+    def _process_highest_status(highest_st_status, stop_event_status, is_pdp_in_navitia_vj):
         # Back-to-normal stop-delete (delete stop-time that was not in base-schedule) is
         # considered "normal", not "deleted".
-        if stop_event_status == ModificationType.delete.name:
-            # TODO: be more robust to cases with loops, or where stop order changes in RT.
-            # Probably do a synchronized pass over realtime and base-schedule VJs
-            vj_st, _ = get_navitia_stop_time_sncf(
-                cr=get_value(pdp, "cr"), ci=get_value(pdp, "ci"), ch=get_value(pdp, "ch"), nav_vj=navitia_vj
-            )
-            if not vj_st:
-                return get_higher_status(highest_st_status, ModificationType.none.name)
+        if stop_event_status == ModificationType.delete.name and not is_pdp_in_navitia_vj:
+            return get_higher_status(highest_st_status, ModificationType.none.name)
 
         return get_higher_status(highest_st_status, stop_event_status)
 
@@ -437,6 +442,7 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
 
         # manage realtime information stop_time by stop_time
         for pdp in pdps:
+            is_pdp_in_nav = _is_pdp_in_navitia_vj(pdp, vj.navitia_vj)
             # retrieve navitia's stop_point corresponding to the current COTS pdp
             nav_stop, log_dict = self._get_navitia_stop_point(pdp, vj.navitia_vj)
             projected_stop_time = {"Arrivee": None, "Depart": None}  # used to check consistency
@@ -473,7 +479,7 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
 
                 cots_stop_time_status = get_value(cots_traveler_time, "statutCirculationOPE", nullable=True)
 
-                if cots_stop_time_status is None or cots_stop_time_status == "REACTIVATION":
+                if cots_stop_time_status is None or (cots_stop_time_status == "REACTIVATION" and is_pdp_in_nav):
                     # if no cots_stop_time_status, it is considered an 'update' of the stop_time
                     # (can be a delay, back to normal, normal, reactivation...)
                     cots_base_datetime = _retrieve_stop_event_datetime(cots_traveler_time)
@@ -500,7 +506,9 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
                         ModificationType.deleted_for_detour.name,
                     )
 
-                elif cots_stop_time_status in ["CREATION", "DETOURNEMENT"]:
+                elif cots_stop_time_status in ["CREATION", "DETOURNEMENT"] or (
+                    cots_stop_time_status == "REACTIVATION" and not is_pdp_in_nav
+                ):
                     # new stop_time added
                     cots_base_datetime = _retrieve_stop_event_datetime(cots_traveler_time)
                     if cots_base_datetime:
@@ -517,7 +525,7 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
                     # delay already added to stop_event datetime
                     setattr(st_update, _delay_map[arrival_departure_toggle], None)
 
-                    if cots_stop_time_status == "CREATION":
+                    if cots_stop_time_status in ["CREATION", "REACTIVATION"]:
                         # pure add
                         setattr(st_update, _status_map[arrival_departure_toggle], ModificationType.add.name)
                     elif cots_stop_time_status == "DETOURNEMENT":
@@ -541,7 +549,7 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
 
                 # Manage resulting trip-status: process highest stop-status
                 highest_st_status = self._process_highest_status(
-                    highest_st_status, stop_event_status, pdp, vj.navitia_vj
+                    highest_st_status, stop_event_status, is_pdp_in_nav
                 )
 
             self._check_stop_time_consistency(
