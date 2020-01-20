@@ -691,6 +691,45 @@ def test_cots_trip_removal_reactivation_add_stop(mock_rabbitmq):
     assert mock_rabbitmq.call_count == 4
 
 
+def check_db_6113_trip_partial_reactivation():
+    assert len(TripUpdate.query.all()) == 1
+    assert len(StopTimeUpdate.query.all()) == 4
+
+    db_trip_react = TripUpdate.find_by_dated_vj(
+        "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
+    )
+    assert db_trip_react
+
+    assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
+    assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
+    assert db_trip_react.vj_id == db_trip_react.vj.id
+    assert db_trip_react.status == "update"
+    assert db_trip_react.effect == "REDUCED_SERVICE"
+    assert db_trip_react.message == "Accident à un Passage à Niveau"
+
+    assert len(db_trip_react.stop_time_updates) == 4
+
+    s = db_trip_react.stop_time_updates[0]
+    assert s.arrival_status == "none"
+    assert s.departure_status == "none"
+    assert s.message is None
+
+    s = db_trip_react.stop_time_updates[1]
+    assert s.arrival_status == "none"
+    assert s.departure_status == "delete"
+    assert s.message is None
+
+    s = db_trip_react.stop_time_updates[2]
+    assert s.arrival_status == "delete"
+    assert s.departure_status == "delete"
+    assert s.message is None
+
+    s = db_trip_react.stop_time_updates[3]
+    assert s.arrival_status == "delete"
+    assert s.departure_status == "none"
+    assert s.message is None
+
+
 def test_cots_trip_removal_reactivation_remove_stops(mock_rabbitmq):
     """
     trip removal, then reactivation, then remove stops
@@ -735,47 +774,27 @@ def test_cots_trip_removal_reactivation_remove_stops(mock_rabbitmq):
     react_delay_6113 = get_fixture_data("cots_train_6113_trip_reactivation_remove_stops.json")
     res = api_post("/cots", data=react_delay_6113)
     assert res == "OK"
-
     with app.app_context():
         assert len(RealTimeUpdate.query.all()) == 3
+        check_db_6113_trip_partial_reactivation()
+
+    cots_6113 = get_fixture_data("cots_train_6113_trip_removal.json")
+    res = api_post("/cots", data=cots_6113)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 4
         assert len(TripUpdate.query.all()) == 1
-        assert len(StopTimeUpdate.query.all()) == 4
+        assert len(StopTimeUpdate.query.all()) == 0
+    check_db_6113_trip_removal()
 
-        db_trip_react = TripUpdate.find_by_dated_vj(
-            "trip:OCETGV-87686006-87751008-2:25768", datetime(2015, 10, 6, 11, 16)
-        )
-        assert db_trip_react
+    react_delay_6113 = get_fixture_data("cots_train_6113_trip_reactivation_remove_stops.json")
+    res = api_post("/cots", data=react_delay_6113)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 5
+        check_db_6113_trip_partial_reactivation()
 
-        assert db_trip_react.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
-        assert db_trip_react.vj.start_timestamp == datetime(2015, 10, 6, 11, 16)
-        assert db_trip_react.vj_id == db_trip_react.vj.id
-        assert db_trip_react.status == "update"
-        assert db_trip_react.effect == "REDUCED_SERVICE"
-        assert db_trip_react.message == "Accident à un Passage à Niveau"
-
-        assert len(db_trip_react.stop_time_updates) == 4
-
-        s = db_trip_react.stop_time_updates[0]
-        assert s.arrival_status == "none"
-        assert s.departure_status == "none"
-        assert s.message is None
-
-        s = db_trip_react.stop_time_updates[1]
-        assert s.arrival_status == "none"
-        assert s.departure_status == "delete"
-        assert s.message is None
-
-        s = db_trip_react.stop_time_updates[2]
-        assert s.arrival_status == "delete"
-        assert s.departure_status == "delete"
-        assert s.message is None
-
-        s = db_trip_react.stop_time_updates[3]
-        assert s.arrival_status == "delete"
-        assert s.departure_status == "none"
-        assert s.message is None
-
-    assert mock_rabbitmq.call_count == 3
+    assert mock_rabbitmq.call_count == 5
 
 
 def test_cots_trip_with_parity_one_unknown_vj(mock_rabbitmq):
