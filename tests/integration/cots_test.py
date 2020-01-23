@@ -1880,6 +1880,13 @@ def test_cots_for_added_trip_chain_type_3():
         assert len(RealTimeUpdate.query.all()) == 7
         check_add_trip_151515_with_delay_and_an_add()
 
+    cots_add_file = get_fixture_data("cots_train_151515_reactivated_trip_with_delay_and_stop_time_added.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 8
+        check_add_trip_151515_with_delay_and_an_add()
+
 
 def test_cots_for_added_trip_chain_delete_readd_stops_delete_reactivate_stops():
     """

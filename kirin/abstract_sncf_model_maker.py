@@ -48,7 +48,7 @@ SNCF_SEARCH_MARGIN = timedelta(hours=1)
 class TripStatus(Enum):
     AJOUTEE = 1  # Added
     SUPPRIMEE = 2  # Deleted
-    PERTURBEE = 3  # Modified, Impacted or Reactivated
+    PERTURBEE = 3  # Impacted or Reactivated
 
 
 class ActionOnTrip(Enum):
