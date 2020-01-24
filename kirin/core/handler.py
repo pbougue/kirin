@@ -374,9 +374,9 @@ def is_new_stop_event_valid(event_name, stop_id, stop_order, nav_stop, db_tu, ne
         )
         return False
 
-    # a stop-event that is not added is a simple modification.
+    # a stop-event that is a simple modification (not added or deleted).
     # it can NOT happen if stop-event was NOT served before in navitia or kirin db
-    if not is_added_new and not is_served_old:
+    if (not is_added_new and not new_stu.is_stop_event_deleted(event_name)) and not is_served_old:
         logger.warning(
             "Can't modify {event} for stop_time {stop_id}, because it is NOT served in "
             "kirin db nor in Navitia base-schedule VJ.".format(event=event_name, stop_id=stop_id)
@@ -406,8 +406,8 @@ def make_fake_realtime_stop_time(order, sp_id, new_stu, db_trip_update):
 
     return {
         "stop_point": new_stu.navitia_stop,
-        "utc_departure_time": departure.time(),
-        "utc_arrival_time": arrival.time(),
+        "utc_departure_time": departure.time() if departure else None,
+        "utc_arrival_time": arrival.time() if arrival else None,
     }
 
 
