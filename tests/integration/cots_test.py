@@ -1948,6 +1948,41 @@ def test_cots_for_added_trip_chain_type_3():
         check_add_trip_151515_with_delay_and_an_add()
 
 
+def test_cots_for_added_trip_chain_type_4():
+    """
+    1. A simple trip add with 5 stop_times all existing in navitia
+    2. Delete the trip with "statutCirculationOPE": "SUPPRESSION" in all stop_times
+    3. Reactivation of the trip with "statutCirculationOPE": "PERTURBEE" in trip
+        and "statutOperationnel": "REACTIVATION", except CREATION at new stop
+    """
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 1
+        check_add_trip_151515()
+
+    cots_add_file = get_fixture_data("cots_train_151515_deleted_trip.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        trips = TripUpdate.query.all()
+        assert len(trips) == 1
+        assert trips[0].status == "delete"
+        assert trips[0].effect == "NO_SERVICE"
+        assert trips[0].company_id == "company:OCE:SN"
+        stop_times = StopTimeUpdate.query.all()
+        assert len(stop_times) == 0
+
+    cots_add_file = get_fixture_data("cots_train_151515_reactivated_trip_with_delay_and_stop_time_created.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 3
+        check_add_trip_151515_with_delay_and_an_add()
+
+
 def test_cots_for_added_trip_chain_delete_readd_stops_delete_reactivate_stops():
     """
     1. A simple trip add with 5 stop_times all existing in navitia
