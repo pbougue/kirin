@@ -1812,12 +1812,14 @@ def test_cots_for_added_trip_chain_type_2():
 
 def test_cots_for_added_trip_chain_type_3():
     """
-    Test for case 2 from the file "Enchainement Cas_API_20181010.xlsx"
+    Test for case 2 from the file "Enchainement Cas_API_20181010.xlsx" (1,2,3)
     1. A simple trip add with 5 stop_times all existing in navitia
     2. Trip modified with 15 minutes delay in each stop_times
     3. Trip modified with a new stop_time added in the above flux cots
     4. Delete the trip with "statutCirculationOPE": "SUPPRESSION" in all stop_times
     5. Re-add the trip with "statutCirculationOPE": "CREATION" in all stop_times and "statutOperationnel": "AJOUTEE"
+    4. Delete the trip with "statutCirculationOPE": "SUPPRESSION" in all stop_times
+    5. Re-add the trip with "statutCirculationOPE": "PERTURBEE" in all stop_times and "statutOperationnel": "REACTIVATION"
     """
     cots_add_file = get_fixture_data("cots_train_151515_added_trip.json")
     res = api_post("/cots", data=cots_add_file)
@@ -1873,14 +1875,18 @@ def test_cots_for_added_trip_chain_type_3():
         stop_times = StopTimeUpdate.query.all()
         assert len(stop_times) == 0
 
-    cots_add_file = get_fixture_data("cots_train_151515_reactivated_trip_with_delay_and_stop_time_added.json")
+    cots_add_file = get_fixture_data(
+        "cots_train_151515_reactivated_trip_with_delay_including_stop_time_added.json"
+    )
     res = api_post("/cots", data=cots_add_file)
     assert res == "OK"
     with app.app_context():
         assert len(RealTimeUpdate.query.all()) == 7
         check_add_trip_151515_with_delay_and_an_add()
 
-    cots_add_file = get_fixture_data("cots_train_151515_reactivated_trip_with_delay_and_stop_time_added.json")
+    cots_add_file = get_fixture_data(
+        "cots_train_151515_reactivated_trip_with_delay_including_stop_time_added.json"
+    )
     res = api_post("/cots", data=cots_add_file)
     assert res == "OK"
     with app.app_context():
