@@ -1143,7 +1143,15 @@ def test_cots_added_and_deleted_stop_time():
     assert res == "OK"
     with app.app_context():
         assert len(RealTimeUpdate.query.all()) == 1
-        assert len(TripUpdate.query.all()) == 0
+        assert len(TripUpdate.query.all()) == 1
+        assert TripUpdate.query.all()[0].status == "update"
+        assert (
+            TripUpdate.query.all()[0].effect == "UNKNOWN_EFFECT"
+        )  # as deleted stop is not one of base-schedule
+        assert TripUpdate.query.all()[0].company_id == "company:OCE:SN"
+        assert len(StopTimeUpdate.query.all()) == 7
+        assert StopTimeUpdate.query.all()[3].arrival_status == "delete"
+        assert StopTimeUpdate.query.all()[3].departure_status == "delete"
 
     cots_add_file = get_fixture_data("cots_train_96231_add.json")
     res = api_post("/cots", data=cots_add_file)

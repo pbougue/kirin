@@ -261,7 +261,10 @@ def _is_full_reactivation_trip(pdps, cots_trip_status):
         stop_statuses = [p.get("horaireVoyageurDepart", {}).get("statutCirculationOPE") for p in pdps[:-1]]
         stop_statuses.extend([p.get("horaireVoyageurArrivee", {}).get("statutCirculationOPE") for p in pdps[1:]])
         if (
-            all(s in ["REACTIVATION", "CREATION", "SUPPRESSION"] for s in stop_statuses)
+            all(
+                s in ["REACTIVATION", "CREATION", "SUPPRESSION", "DETOURNEMENT", "SUPPRESSION_DETOURNEMENT"]
+                for s in stop_statuses
+            )
             and "REACTIVATION" in stop_statuses
         ):
             return True
