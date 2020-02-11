@@ -1813,6 +1813,40 @@ def check_add_trip_151515_with_delay_and_an_add_and_a_delete():
     assert stop_time[5].departure == datetime(2012, 11, 20, 16, 15)
 
 
+def check_add_trip_151515_with_delay_and_a_detour():
+    trips = TripUpdate.query.all()
+    assert len(trips) == 1
+    assert trips[0].status == "add"
+    assert trips[0].effect == "ADDITIONAL_SERVICE"
+    assert trips[0].company_id == "company:OCE:SN"
+    assert trips[0].physical_mode_id == "physical_mode:LongDistanceTrain"
+    assert trips[0].headsign == "151515"
+    stop_time = StopTimeUpdate.query.all()
+    assert len(stop_time) == 6
+    assert stop_time[0].arrival_status == "none"
+    assert stop_time[0].arrival == datetime(2012, 11, 20, 11, 15)
+    assert stop_time[0].departure_status == "add"
+    assert stop_time[0].departure == datetime(2012, 11, 20, 11, 15)
+    assert stop_time[1].arrival_status == "added_for_detour"
+    assert stop_time[1].arrival == datetime(2012, 11, 20, 11, 45)
+    assert stop_time[1].departure_status == "added_for_detour"
+    assert stop_time[1].departure == datetime(2012, 11, 20, 11, 55)
+    assert stop_time[2].arrival_status == "deleted_for_detour"
+    assert stop_time[2].departure_status == "deleted_for_detour"
+    assert stop_time[3].arrival_status == "add"
+    assert stop_time[3].arrival == datetime(2012, 11, 20, 14, 15)
+    assert stop_time[3].departure_status == "add"
+    assert stop_time[3].departure == datetime(2012, 11, 20, 14, 25)
+    assert stop_time[4].arrival_status == "add"
+    assert stop_time[4].arrival == datetime(2012, 11, 20, 15, 15)
+    assert stop_time[4].departure_status == "add"
+    assert stop_time[4].departure == datetime(2012, 11, 20, 15, 25)
+    assert stop_time[5].arrival_status == "add"
+    assert stop_time[5].arrival == datetime(2012, 11, 20, 16, 15)
+    assert stop_time[5].departure_status == "none"
+    assert stop_time[5].departure == datetime(2012, 11, 20, 16, 15)
+
+
 def check_add_trip_with_last_2_stops_deleted():
     trips = TripUpdate.query.all()
     assert len(trips) == 1
@@ -2060,6 +2094,42 @@ def test_cots_for_added_trip_chain_type_5():
     with app.app_context():
         assert len(RealTimeUpdate.query.all()) == 3
         check_add_trip_151515_with_delay_and_an_add_and_a_delete()
+
+
+def test_cots_for_added_trip_chain_type_6():
+    """
+    1. A simple trip add with 5 stop_times all existing in navitia
+    2. Delete the trip with "statutCirculationOPE": "SUPPRESSION" in all stop_times
+    3. Partial reactivation/detour of the trip with "statutCirculationOPE": "PERTURBEE" in trip
+        and "statutOperationnel": "REACTIVATION", except DETOURNEMENT at new stop
+        and SUPPRESSION_DETOURNEMENT at not reactivated one
+    """
+    cots_add_file = get_fixture_data("cots_train_151515_added_trip.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 1
+        check_add_trip_151515()
+
+    cots_add_file = get_fixture_data("cots_train_151515_deleted_trip.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 2
+        trips = TripUpdate.query.all()
+        assert len(trips) == 1
+        assert trips[0].status == "delete"
+        assert trips[0].effect == "NO_SERVICE"
+        assert trips[0].company_id == "company:OCE:SN"
+        stop_times = StopTimeUpdate.query.all()
+        assert len(stop_times) == 0
+
+    cots_add_file = get_fixture_data("cots_train_151515_reactivated_trip_with_delay_and_detour.json")
+    res = api_post("/cots", data=cots_add_file)
+    assert res == "OK"
+    with app.app_context():
+        assert len(RealTimeUpdate.query.all()) == 3
+        check_add_trip_151515_with_delay_and_a_detour()
 
 
 def test_cots_for_added_trip_chain_delete_readd_stops_delete_reactivate_stops():
