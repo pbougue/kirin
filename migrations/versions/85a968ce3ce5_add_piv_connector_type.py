@@ -19,11 +19,17 @@ def upgrade():
     op.execute("ALTER TYPE connector_type RENAME TO connector_type_tmp")
     op.execute("CREATE TYPE connector_type AS ENUM('piv', 'cots', 'gtfs-rt')")  # add 'piv' here
     op.execute(
+        "LOCK TABLE real_time_update; ALTER TABLE real_time_update DROP CONSTRAINT fk_real_time_update_contributor_id"
+    )
+    op.execute(
         "ALTER TABLE real_time_update ALTER COLUMN connector TYPE connector_type USING connector::text::connector_type"
     )
     op.execute(
         "ALTER TABLE contributor ALTER COLUMN connector_type \
             TYPE connector_type USING connector_type::text::connector_type"
+    )
+    op.create_foreign_key(
+        "fk_real_time_update_contributor_id", "real_time_update", "contributor", ["contributor_id"], ["id"]
     )
     op.execute("DROP TYPE connector_type_tmp")
 
@@ -50,10 +56,16 @@ def downgrade():
     op.execute("ALTER TYPE connector_type RENAME TO connector_type_tmp")
     op.execute("CREATE TYPE connector_type AS ENUM('cots', 'gtfs-rt')")  # no more 'piv'
     op.execute(
+        "LOCK TABLE real_time_update; ALTER TABLE real_time_update DROP CONSTRAINT fk_real_time_update_contributor_id"
+    )
+    op.execute(
         "ALTER TABLE real_time_update ALTER COLUMN connector TYPE connector_type USING connector::text::connector_type"
     )
     op.execute(
         "ALTER TABLE contributor ALTER COLUMN connector_type \
             TYPE connector_type USING connector_type::text::connector_type"
+    )
+    op.create_foreign_key(
+        "fk_real_time_update_contributor_id", "real_time_update", "contributor", ["contributor_id"], ["id"]
     )
     op.execute("DROP TYPE connector_type_tmp")
