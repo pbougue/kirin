@@ -39,6 +39,8 @@ import navitia_wrapper
 from kirin import redis_client
 from kirin.core import model
 from kirin.core.types import ConnectorType
+from kirin.piv import KirinModelBuilder
+from kirin.utils import wrap_build
 
 
 def get_piv_contributors(include_deactivated=False):
@@ -95,5 +97,5 @@ class Piv(Resource):
 
         raw_json = _get_piv(flask.globals.request)
 
-        # TODO: store and handle PIV feed
+        wrap_build(KirinModelBuilder(), contributor, raw_json)
         return {"message": "PIV feed processed"}, 200

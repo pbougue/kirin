@@ -42,8 +42,11 @@ from redis.exceptions import ConnectionError
 from contextlib import contextmanager
 from kirin.core import model
 from kirin.core.model import RealTimeUpdate
-from kirin.exceptions import InternalException
+from kirin.exceptions import InternalException, KirinException
 import requests
+from datetime import datetime
+
+from kirin.new_relic import is_invalid_input_exception, record_custom_parameter
 
 
 def floor_datetime(datetime):
@@ -278,3 +281,44 @@ def get_lock(logger, lock_name, lock_timeout):
         if locked:
             logger.debug("releasing lock %s", lock_name)
             lock.release()
+
+
+def wrap_build(builder, contributor, input):
+    start_datetime = datetime.utcnow()
+    rt_update = None
+    log_dict = {"contributor": contributor.id}
+    status = "OK"
+
+    try:
+        log_dict.update(builder.build(contributor, input))
+
+    except Exception as e:
+        status = "failure"
+        allow_reprocess = True
+        if is_invalid_input_exception(e):
+            status = "warning"  # Kirin did his job correctly if the input is invalid and rejected
+            allow_reprocess = False  # reprocess is useless if input is invalid
+
+        if rt_update is not None:
+            error = e.data["error"] if (isinstance(e, KirinException) and "error" in e.data) else e.message
+            set_rtu_status_ko(rt_update, error, is_reprocess_same_data_allowed=allow_reprocess)
+            model.db.session.add(rt_update)
+            model.db.session.commit()
+        else:
+            # rt_update is not built, make sure reprocess is allowed
+            allow_reprocess_same_data(contributor.id)
+
+        log_dict.update({"exc_summary": six.text_type(e), "reason": e})
+
+        record_custom_parameter("reason", e)  # using __str__() here to have complete details
+        raise  # filters later for APM (auto.)
+
+    finally:
+        log_dict.update({"duration": (datetime.utcnow() - start_datetime).total_seconds()})
+        record_call(status, **log_dict)
+        if status == "OK":
+            logging.getLogger(__name__).info(status, extra=log_dict)
+        elif status == "warning":
+            logging.getLogger(__name__).warning(status, extra=log_dict)
+        else:
+            logging.getLogger(__name__).error(status, extra=log_dict)

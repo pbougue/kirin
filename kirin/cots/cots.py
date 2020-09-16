@@ -83,7 +83,6 @@ def get_cots(req):
 
 class Cots(AbstractSNCFResource):
     def __init__(self):
-        url = current_app.config[str("NAVITIA_URL")]
         contributor = get_cots_contributor()
         super(Cots, self).__init__(
             navitia_wrapper.Navitia(
