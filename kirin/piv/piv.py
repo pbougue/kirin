@@ -34,13 +34,12 @@ import flask
 from flask import url_for
 from flask.globals import current_app
 from flask_restful import Resource, marshal, abort
+
+from kirin.core.abstract_builder import wrap_build
 from kirin.exceptions import InvalidArguments
-import navitia_wrapper
-from kirin import redis_client
 from kirin.core import model
 from kirin.core.types import ConnectorType
 from kirin.piv import KirinModelBuilder
-from kirin.utils import wrap_build
 
 
 def get_piv_contributors(include_deactivated=False):
@@ -60,17 +59,6 @@ def _get_piv(req):
     if not req.data:
         raise InvalidArguments("no piv data provided")
     return req.data
-
-
-def make_navitia_wrapper(contributor):
-    return navitia_wrapper.Navitia(
-        url=current_app.config.get(str("NAVITIA_URL")),
-        token=contributor.navitia_token,
-        timeout=current_app.config.get(str("NAVITIA_TIMEOUT"), 5),
-        cache=redis_client,
-        query_timeout=current_app.config.get(str("NAVITIA_QUERY_CACHE_TIMEOUT"), 600),
-        pubdate_timeout=current_app.config.get(str("NAVITIA_PUBDATE_CACHE_TIMEOUT"), 600),
-    ).instance(contributor.navitia_coverage)
 
 
 class PivIndex(Resource):
@@ -97,5 +85,5 @@ class Piv(Resource):
 
         raw_json = _get_piv(flask.globals.request)
 
-        wrap_build(KirinModelBuilder(), contributor, raw_json)
+        wrap_build(KirinModelBuilder(contributor), raw_json)
         return {"message": "PIV feed processed"}, 200

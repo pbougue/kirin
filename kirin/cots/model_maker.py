@@ -35,27 +35,20 @@ import logging
 from datetime import datetime
 from operator import itemgetter
 
+import jmespath
 from dateutil import parser
 from flask.globals import current_app
 from pytz import utc
-
-from kirin.abstract_sncf_model_maker import (
-    AbstractSNCFKirinModelBuilder,
-    get_navitia_stop_time_sncf,
-    TRAIN_ID_FORMAT,
-    SNCF_SEARCH_MARGIN,
-    TripStatus,
-    ActionOnTrip,
-)
 
 # For perf benches:
 # https://artem.krylysov.com/blog/2015/09/29/benchmark-python-json-libraries/
 import ujson
 
 from kirin.core import model
+from kirin.core.abstract_builder import AbstractKirinModelBuilder
 from kirin.cots.message_handler import MessageHandler
-from kirin.exceptions import InvalidArguments
-from kirin.utils import record_internal_failure
+from kirin.exceptions import InvalidArguments, InternalException, ObjectNotFound
+from kirin.utils import record_internal_failure, make_rt_update, to_navitia_utc_str
 from kirin.core.types import (
     TripEffect,
     ModificationType,
@@ -63,8 +56,77 @@ from kirin.core.types import (
     get_effect_by_stop_time_status,
     get_mode_filter,
 )
+from enum import Enum
+from datetime import timedelta
 
 DEFAULT_COMPANY_ID = "1187"
+TRAIN_ID_FORMAT = "OCE:SN:{}"
+SNCF_SEARCH_MARGIN = timedelta(hours=1)
+
+
+class TripStatus(Enum):
+    AJOUTEE = 1  # Added
+    SUPPRIMEE = 2  # Deleted
+    PERTURBEE = 3  # Modified, Impacted or Reactivated
+
+
+class ActionOnTrip(Enum):
+    NOT_ADDED = 1
+    FIRST_TIME_ADDED = 2  # Add trip for the first time / delete followed by add
+    PREVIOUSLY_ADDED = 3  # add followed by update
+
+
+def make_navitia_empty_vj(headsign):
+    headsign = TRAIN_ID_FORMAT.format(headsign)
+    return {"id": headsign, "trip": {"id": headsign}}
+
+
+def headsigns(str_headsign):
+    """
+    we remove leading 0 for the headsigns and handle the train's parity.
+    The parity is the number after the '/', it gives an alternative train number.
+
+    >>> headsigns('2038')
+    [u'2038']
+    >>> headsigns('002038')
+    [u'2038']
+    >>> headsigns('002038/12')
+    [u'2038', u'2012']
+    >>> headsigns('2038/3')
+    [u'2038', u'2033']
+    >>> headsigns('2038/123')
+    [u'2038', u'2123']
+    >>> headsigns('2038/12345')
+    [u'2038', u'12345']
+
+    """
+    h = str_headsign.lstrip("0")
+    if "/" not in h:
+        return [h]
+    signs = h.split("/", 1)
+    alternative_headsign = signs[0][: -len(signs[1])] + signs[1]
+    return [signs[0], alternative_headsign]
+
+
+def get_navitia_stop_time_sncf(cr, ci, ch, nav_vj):
+    nav_external_code = "{cr}-{ci}-{ch}".format(cr=cr, ci=ci, ch=ch)
+
+    nav_stop_times = jmespath.search(
+        "stop_times[? stop_point.stop_area.codes[? value==`{nav_ext_code}` && type==`CR-CI-CH`]]".format(
+            nav_ext_code=nav_external_code
+        ),
+        nav_vj,
+    )
+
+    log_dict = None
+    if not nav_stop_times:
+        log_dict = {"log": "missing stop point", "stop_point_code": nav_external_code}
+        return None, log_dict
+
+    if len(nav_stop_times) > 1:
+        log_dict = {"log": "duplicate stops", "stop_point_code": nav_external_code}
+
+    return nav_stop_times[0], log_dict
 
 
 def get_value(sub_json, key, nullable=False):
@@ -296,9 +358,9 @@ def _get_action_on_trip(train_numbers, dict_version, pdps):
     return action_on_trip
 
 
-class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
-    def __init__(self, nav, contributor):
-        super(KirinModelBuilder, self).__init__(nav, contributor)
+class KirinModelBuilder(AbstractKirinModelBuilder):
+    def __init__(self, contributor):
+        super(KirinModelBuilder, self).__init__(contributor, is_new_complete=True)
         self.message_handler = MessageHandler(
             api_key=current_app.config[str("COTS_PAR_IV_API_KEY")],
             resource_server=current_app.config[str("COTS_PAR_IV_MOTIF_RESOURCE_SERVER")],
@@ -309,7 +371,14 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
             timeout=current_app.config[str("COTS_PAR_IV_REQUEST_TIMEOUT")],
         )
 
-    def build(self, rt_update):
+    def build_rt_update(self, input_raw):
+        rt_update = make_rt_update(
+            input_raw, connector=self.contributor.connector_type, contributor=self.contributor.id
+        )
+        log_dict = {}
+        return rt_update, log_dict
+
+    def build_trip_updates(self, rt_update):
         """
         parse the COTS raw json stored in the rt_update object (in Kirin db)
         and return a list of trip updates
@@ -319,6 +388,9 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
         Most of the realtime information parsed is contained in the 'nouvelleVersion' sub-object
         (see fixtures and documentation)
         """
+        # assuming UTF-8 encoding for all input
+        rt_update.raw_data = rt_update.raw_data.encode("utf-8")
+
         try:
             json = ujson.loads(rt_update.raw_data)
         except ValueError as e:
@@ -340,7 +412,8 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
         vjs = self._get_vjs(train_numbers, pdps, action_on_trip=action_on_trip)
         trip_updates = [self._make_trip_update(dict_version, vj, action_on_trip=action_on_trip) for vj in vjs]
 
-        return trip_updates
+        log_dict = {}
+        return trip_updates, log_dict
 
     def _get_vjs(self, train_numbers, pdps, action_on_trip=ActionOnTrip.NOT_ADDED.name):
         vj_start = _get_first_stop_datetime(
@@ -374,7 +447,7 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
         create the new TripUpdate object
         Following the COTS spec: https://github.com/CanalTP/kirin/blob/master/documentation/cots_connector.md
         """
-        trip_update = model.TripUpdate(vj=vj, contributor=self.contributor)
+        trip_update = model.TripUpdate(vj=vj, contributor=self.contributor.id)
         trip_message_id = get_value(json_train, "idMotifInterneReference", nullable=True)
         if trip_message_id:
             trip_update.message = self.message_handler.get_message(index=trip_message_id)
@@ -421,8 +494,8 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
             projected_stop_time = {"Arrivee": None, "Depart": None}  # used to check consistency
 
             if log_dict:
-                record_internal_failure(log_dict["log"], contributor=self.contributor)
-                log_dict.update({"contributor": self.contributor})
+                record_internal_failure(log_dict["log"], contributor=self.contributor.id)
+                log_dict.update({"contributor": self.contributor.id})
                 logging.getLogger(__name__).info("metrology", extra=log_dict)
 
             if nav_stop is None:
@@ -530,6 +603,85 @@ class KirinModelBuilder(AbstractSNCFKirinModelBuilder):
         if trip_update.effect == TripEffect.MODIFIED_SERVICE.name:
             trip_update.effect = get_effect_by_stop_time_status(highest_st_status)
         return trip_update
+
+    def _get_navitia_vjs(self, headsign_str, since_dt, until_dt, action_on_trip=ActionOnTrip.NOT_ADDED.name):
+        """
+        Search for navitia's vehicle journeys with given headsigns, in the period provided
+        :param headsign_str: the headsigns to search for (can be multiple expressed in one string, like "2512/3")
+        :param since_dt: naive UTC datetime that starts the search period.
+            Typically the supposed datetime of first base-schedule stop_time.
+        :param until_dt: naive UTC datetime that ends the search period.
+            Typically the supposed datetime of last base-schedule stop_time.
+        :param action_on_trip: action to be performed on trip. This param is used to do consistency check
+        """
+        log = logging.LoggerAdapter(logging.getLogger(__name__), extra={"contributor": self.contributor.id})
+
+        if (since_dt is None) or (until_dt is None):
+            return []
+
+        if since_dt.tzinfo is not None or until_dt.tzinfo is not None:
+            raise InternalException("Invalid datetime provided: must be naive (and UTC)")
+
+        vjs = {}
+        # to get the date of the vj we use the start/end of the vj + some tolerance
+        # since the SNCF data and navitia data might not be synchronized
+        extended_since_dt = since_dt - SNCF_SEARCH_MARGIN
+        extended_until_dt = until_dt + SNCF_SEARCH_MARGIN
+
+        # using a set to deduplicate
+        # one headsign_str (ex: "96320/1") can lead to multiple headsigns (ex: ["96320", "96321"])
+        # but most of the time (if not always) they refer to the same VJ
+        # (the VJ switches headsign along the way).
+        # So we do one VJ search for each headsign to ensure we get it, then deduplicate VJs
+        for train_number in headsigns(headsign_str):
+
+            log.debug(
+                "searching for vj {} during period [{} - {}] in navitia".format(
+                    train_number, extended_since_dt, extended_until_dt
+                )
+            )
+
+            navitia_vjs = self.navitia.vehicle_journeys(
+                q={
+                    "headsign": train_number,
+                    "since": to_navitia_utc_str(extended_since_dt),
+                    "until": to_navitia_utc_str(extended_until_dt),
+                    "depth": "2",  # we need this depth to get the stoptime's stop_area
+                    "show_codes": "true",  # we need the stop_points CRCICH codes
+                }
+            )
+
+            # Consistency check on action applied to trip
+            if action_on_trip == ActionOnTrip.NOT_ADDED.name:
+                if not navitia_vjs:
+                    log.info(
+                        "impossible to find train {t} on [{s}, {u}[".format(
+                            t=train_number, s=extended_since_dt, u=extended_until_dt
+                        )
+                    )
+                    record_internal_failure("missing train", contributor=self.contributor.id)
+
+            else:
+                if action_on_trip == ActionOnTrip.FIRST_TIME_ADDED.name and navitia_vjs:
+                    raise InvalidArguments(
+                        "Invalid action, trip {} already present in navitia".format(train_number)
+                    )
+
+                navitia_vjs = [make_navitia_empty_vj(train_number)]
+
+            for nav_vj in navitia_vjs:
+
+                try:
+                    vj = model.VehicleJourney(nav_vj, extended_since_dt, extended_until_dt, vj_start_dt=since_dt)
+                    vjs[nav_vj["id"]] = vj
+                except Exception as e:
+                    log.exception("Error while creating kirin VJ of {}: {}".format(nav_vj.get("id"), e))
+                    record_internal_failure("Error while creating kirin VJ", contributor=self.contributor.id)
+
+        if not vjs:
+            raise ObjectNotFound("no train found for headsign(s) {}".format(headsign_str))
+
+        return vjs.values()
 
     def _get_navitia_stop_point(self, pdp, nav_vj):
         """

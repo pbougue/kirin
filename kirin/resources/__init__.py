@@ -30,7 +30,7 @@
 # www.navitia.io
 
 from __future__ import absolute_import, print_function, unicode_literals, division
-from .index import Index
-from .status import Status
-from .contributors import Contributors
-from .health import Health
+from kirin.resources.index import Index
+from kirin.resources.status import Status
+from kirin.resources.contributors import Contributors
+from kirin.resources.health import Health

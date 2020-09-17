@@ -168,7 +168,7 @@ def find_st_in_vj(st_id, vj_sts):
     return next((vj_st for vj_st in vj_sts if vj_st.get("stop_point", {}).get("id") == st_id), None)
 
 
-def handle(real_time_update, trip_updates, contributor, is_new_complete=False):
+def handle(real_time_update, trip_updates, contributor_id, is_new_complete=False):
     """
     receive a RealTimeUpdate with at least one TripUpdate filled with the data received
     by the connector. each TripUpdate is associated with the VehicleJourney returned by jormungandr
@@ -202,11 +202,11 @@ def handle(real_time_update, trip_updates, contributor, is_new_complete=False):
 
     feed = convert_to_gtfsrt(real_time_update.trip_updates, gtfs_realtime_pb2.FeedHeader.DIFFERENTIAL)
     feed_str = feed.SerializeToString()
-    publish(feed_str, contributor)
+    publish(feed_str, contributor_id)
 
     data_time = datetime.datetime.utcfromtimestamp(feed.header.timestamp)
     log_dict = {
-        "contributor": contributor,
+        "contributor": contributor_id,
         "timestamp": data_time,
         "trip_update_count": len(feed.entity),
         "size": len(feed_str),

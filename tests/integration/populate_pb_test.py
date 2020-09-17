@@ -36,9 +36,9 @@ from kirin.core.populate_pb import convert_to_gtfsrt, to_posix_time, fill_stop_t
 import datetime
 from kirin import app, db
 from kirin import gtfs_realtime_pb2, kirin_pb2
+from kirin.cots.model_maker import make_navitia_empty_vj
 from kirin.utils import make_rt_update
 from tests.check_utils import _dt
-from kirin.abstract_sncf_model_maker import make_navitia_empty_vj
 from tests.integration.conftest import COTS_CONTRIBUTOR
 
 

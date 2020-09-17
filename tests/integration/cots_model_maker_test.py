@@ -28,17 +28,19 @@
 # https://groups.google.com/d/forum/navitia
 # www.navitia.io
 from __future__ import absolute_import, print_function, unicode_literals, division
-from datetime import timedelta
+from datetime import timedelta, datetime
 import pytest
 
-from kirin import db, app
-from kirin.core import handle
+from kirin import app
+from kirin.core import model
+from kirin.core.abstract_builder import wrap_build
+from kirin.core.model import TripUpdate
+from kirin.core.types import ConnectorType
 from kirin.cots import KirinModelBuilder, model_maker
-from kirin.utils import make_rt_update
-from tests.check_utils import get_fixture_data, dumb_nav_wrapper
+from kirin.cots.model_maker import ActionOnTrip
+from tests.check_utils import get_fixture_data
 from tests.integration.utils_cots_test import requests_mock_cause_message
 from tests.integration.conftest import clean_db, COTS_CONTRIBUTOR
-from kirin.abstract_sncf_model_maker import ActionOnTrip
 import json
 
 
@@ -58,13 +60,12 @@ def test_cots_train_delayed(mock_navitia_fixture):
     input_train_delayed = get_fixture_data("cots_train_96231_delayed.json")
 
     with app.app_context():
-        rt_update = make_rt_update(input_train_delayed, connector="cots", contributor=COTS_CONTRIBUTOR)
-        trip_updates = KirinModelBuilder(dumb_nav_wrapper(), contributor=COTS_CONTRIBUTOR).build(rt_update)
+        contributor = model.Contributor(
+            id=COTS_CONTRIBUTOR, navitia_coverage=None, connector_type=ConnectorType.cots.value
+        )
+        wrap_build(KirinModelBuilder(contributor), input_train_delayed)
 
-        # we associate the trip_update manually for sqlalchemy to make the links
-        rt_update.trip_updates = trip_updates
-        db.session.add(rt_update)
-        db.session.commit()
+        trip_updates = TripUpdate.query.all()
 
         assert len(trip_updates) == 1
         trip_up = trip_updates[0]
@@ -81,10 +82,10 @@ def test_cots_train_delayed(mock_navitia_fixture):
         assert st.id
         assert st.stop_id == "stop_point:OCE:SP:TrainTER-87214056"
         # the COTS data has no listeHoraireProjeteArrivee, so the status is 'none'
-        assert st.arrival is None  # not computed yet
-        assert st.arrival_delay is None
+        assert st.arrival == datetime(2015, 9, 21, 15, 38, 0)
+        assert st.arrival_delay == timedelta(minutes=0)
         assert st.arrival_status == "none"
-        assert st.departure is None
+        assert st.departure == datetime(2015, 9, 21, 15, 55, 0)
         assert st.departure_delay == timedelta(minutes=15)
         assert st.departure_status == "update"
         assert st.message == "Affluence exceptionnelle de voyageurs"
@@ -93,10 +94,10 @@ def test_cots_train_delayed(mock_navitia_fixture):
         st = trip_up.stop_time_updates[2]
         assert st.id
         assert st.stop_id == "stop_point:OCE:SP:TrainTER-87182014"
-        assert st.arrival is None
+        assert st.arrival == datetime(2015, 9, 21, 16, 6, 0)
         assert st.arrival_delay == timedelta(minutes=15)
         assert st.arrival_status == "update"
-        assert st.departure is None
+        assert st.departure == datetime(2015, 9, 21, 16, 8, 0)
         assert st.departure_delay == timedelta(minutes=15)
         assert st.departure_status == "update"
         assert st.message == "Affluence exceptionnelle de voyageurs"
@@ -105,12 +106,12 @@ def test_cots_train_delayed(mock_navitia_fixture):
         st = trip_up.stop_time_updates[-1]
         assert st.id
         assert st.stop_id == "stop_point:OCE:SP:TrainTER-85000109"
-        assert st.arrival is None
+        assert st.arrival == datetime(2015, 9, 21, 16, 54, 0)
         assert st.arrival_delay == timedelta(minutes=15)
         assert st.arrival_status == "update"
         # no departure since it's the last (thus the departure will be before the arrival)
-        assert st.departure is None
-        assert st.departure_delay is None
+        assert st.departure == datetime(2015, 9, 21, 16, 54, 0)
+        assert st.departure_delay == timedelta(minutes=15)
         assert st.departure_status == "none"
         assert st.message == "Affluence exceptionnelle de voyageurs"
 
@@ -123,12 +124,12 @@ def test_cots_train_trip_removal(mock_navitia_fixture):
     input_train_trip_removed = get_fixture_data("cots_train_6113_trip_removal.json")
 
     with app.app_context():
-        rt_update = make_rt_update(input_train_trip_removed, connector="cots", contributor=COTS_CONTRIBUTOR)
-        trip_updates = KirinModelBuilder(dumb_nav_wrapper(), contributor=COTS_CONTRIBUTOR).build(rt_update)
-        rt_update.trip_updates = trip_updates
-        db.session.add(rt_update)
-        db.session.commit()
+        contributor = model.Contributor(
+            id=COTS_CONTRIBUTOR, navitia_coverage=None, connector_type=ConnectorType.cots.value
+        )
+        wrap_build(KirinModelBuilder(contributor), input_train_trip_removed)
 
+        trip_updates = TripUpdate.query.all()
         assert len(trip_updates) == 1
         trip_up = trip_updates[0]
         assert trip_up.vj.navitia_trip_id == "trip:OCETGV-87686006-87751008-2:25768"
@@ -161,9 +162,11 @@ def test_get_action_on_trip_add(mock_navitia_fixture):
         assert action_on_trip == ActionOnTrip.FIRST_TIME_ADDED.name
 
         # Test for add followed by update should be PREVIOUSLY_ADDED
-        rt_update = make_rt_update(input_trip_add, connector="cots", contributor=COTS_CONTRIBUTOR)
-        trip_updates = KirinModelBuilder(dumb_nav_wrapper(), contributor=COTS_CONTRIBUTOR).build(rt_update)
-        _, log_dict = handle(rt_update, trip_updates, COTS_CONTRIBUTOR, is_new_complete=True)
+        contributor = model.Contributor(
+            id=COTS_CONTRIBUTOR, navitia_coverage=None, connector_type=ConnectorType.cots.value
+        )
+        builder = KirinModelBuilder(contributor)
+        wrap_build(builder, input_trip_add)
 
         input_update_added_trip = get_fixture_data("cots_train_151515_added_trip_with_delay.json")
         json_data = json.loads(input_update_added_trip)
@@ -178,15 +181,11 @@ def test_get_action_on_trip_add(mock_navitia_fixture):
         clean_db()
 
         # Delete the recently added trip followed by add: should be FIRST_TIME_ADDED
-        rt_update = make_rt_update(input_trip_add, connector="cots", contributor=COTS_CONTRIBUTOR)
-        trip_updates = KirinModelBuilder(dumb_nav_wrapper(), contributor=COTS_CONTRIBUTOR).build(rt_update)
-        _, log_dict = handle(rt_update, trip_updates, COTS_CONTRIBUTOR, is_new_complete=True)
+        wrap_build(builder, input_trip_add)
         input_trip_delete = get_fixture_data(
             "cots_train_151515_deleted_trip_with_delay_and_stop_time_added.json"
         )
-        rt_update = make_rt_update(input_trip_delete, connector="cots", contributor=COTS_CONTRIBUTOR)
-        trip_updates = KirinModelBuilder(dumb_nav_wrapper(), contributor=COTS_CONTRIBUTOR).build(rt_update)
-        _, log_dict = handle(rt_update, trip_updates, COTS_CONTRIBUTOR, is_new_complete=True)
+        wrap_build(builder, input_trip_delete)
 
         input_added_trip = get_fixture_data("cots_train_151515_added_trip.json")
         json_data = json.loads(input_added_trip)

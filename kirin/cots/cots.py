@@ -32,10 +32,11 @@
 from __future__ import absolute_import, print_function, unicode_literals, division
 import flask
 from flask.globals import current_app
-import navitia_wrapper
 import logging
 
-from kirin.abstract_sncf_resource import AbstractSNCFResource
+from flask_restful import Resource
+
+from kirin.core.abstract_builder import wrap_build
 from kirin.cots import KirinModelBuilder
 from kirin.exceptions import InvalidArguments, SubServiceError
 from kirin.core import model
@@ -81,18 +82,12 @@ def get_cots(req):
     return req.data
 
 
-class Cots(AbstractSNCFResource):
+class Cots(Resource):
     def __init__(self):
-        contributor = get_cots_contributor()
-        super(Cots, self).__init__(
-            navitia_wrapper.Navitia(
-                url=current_app.config[str("NAVITIA_URL")], token=contributor.navitia_token
-            ).instance(contributor.navitia_coverage),
-            current_app.config.get(str("NAVITIA_TIMEOUT"), 5),
-            contributor.id,
-            KirinModelBuilder,
-        )
+        self.builder = KirinModelBuilder(get_cots_contributor())
 
     def post(self):
         raw_json = get_cots(flask.globals.request)
-        return self.process_post(raw_json, "cots")
+
+        wrap_build(self.builder, raw_json)
+        return "OK", 200

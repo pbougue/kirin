@@ -31,28 +31,25 @@
 
 from __future__ import absolute_import, print_function, unicode_literals, division
 
-from kirin import core
-
 # For perf benches:
 # https://artem.krylysov.com/blog/2015/09/29/benchmark-python-json-libraries/
 import ujson
 
+from kirin.core.abstract_builder import AbstractKirinModelBuilder
 from kirin.exceptions import InvalidArguments
 from kirin.utils import make_rt_update
 
 
-class KirinModelBuilder(object):
-    def build(self, contributor, input):
-        # create a raw rt_update obj, save the raw_input into the db
-        rt_update = make_rt_update(input, connector=contributor.connector_type, contributor=contributor.id)
-        # assuming UTF-8 encoding for all input
-        rt_update.raw_data = rt_update.raw_data.encode("utf-8")
+class KirinModelBuilder(AbstractKirinModelBuilder):
+    def __init__(self, contributor):
+        super(KirinModelBuilder, self).__init__(contributor, is_new_complete=True)
 
-        # raw_input is interpreted
-        trip_updates = self.build_trip_updates(rt_update)
-        _, handler_log_dict = core.handle(rt_update, trip_updates, contributor.id, is_new_complete=True)
-        handler_log_dict = {}
-        return handler_log_dict
+    def build_rt_update(self, input_raw):
+        rt_update = make_rt_update(
+            input_raw, connector=self.contributor.connector_type, contributor=self.contributor.id
+        )
+        log_dict = {}
+        return rt_update, log_dict
 
     def build_trip_updates(self, rt_update):
         """
@@ -61,6 +58,9 @@ class KirinModelBuilder(object):
 
         The TripUpdates are not yet associated with the RealTimeUpdate
         """
+        # assuming UTF-8 encoding for all input
+        rt_update.raw_data = rt_update.raw_data.encode("utf-8")
+
         try:
             json = ujson.loads(rt_update.raw_data)
         except ValueError as e:
@@ -69,4 +69,5 @@ class KirinModelBuilder(object):
         # TODO: build trip_update from PIV feed
         trip_updates = []
 
-        return trip_updates
+        log_dict = {}
+        return trip_updates, log_dict
