@@ -34,7 +34,8 @@ import pytest
 
 from kirin import app
 from kirin.core.model import RealTimeUpdate, TripUpdate, StopTimeUpdate
-from tests.check_utils import api_post
+from kirin.core.types import ConnectorType
+from tests.check_utils import api_post, api_get
 from tests import mock_navitia
 from tests.integration.conftest import PIV_CONTRIBUTOR
 
@@ -60,16 +61,36 @@ def mock_rabbitmq(monkeypatch):
     return mock_amqp
 
 
+def test_wrong_get_piv_with_id():
+    """
+    GET /piv/id.contributor (so with an id) is not allowed, only POST is possible
+    """
+    resp, status = api_get("/piv/{}".format(PIV_CONTRIBUTOR), check=False)
+    assert status == 405
+    assert resp.get("message") == "The method is not allowed for the requested URL."
+
+
 def test_piv_post_wrong_data():
     """
     simple json post on the api
     """
-    res, status = api_post("/piv/{}".format(PIV_CONTRIBUTOR), check=False, data="{}")
+    wrong_piv_feed = "{}"
+    res, status = api_post("/piv/{}".format(PIV_CONTRIBUTOR), check=False, data=wrong_piv_feed)
 
     # For now, no check on data
     # TODO xfail: check and change test
     assert status == 200
     assert "PIV feed processed" in res.get("message")
+
+    with app.app_context():
+        # Raw data is saved in db, even when an error occurred
+        assert len(RealTimeUpdate.query.all()) == 1
+        assert len(TripUpdate.query.all()) == 0
+        assert len(StopTimeUpdate.query.all()) == 0
+
+        assert RealTimeUpdate.query.first().status == "KO"
+        assert RealTimeUpdate.query.first().error == "No new information destined to navitia for this piv"
+        assert RealTimeUpdate.query.first().raw_data == wrong_piv_feed
 
 
 def test_piv_post_no_data():
@@ -93,3 +114,25 @@ def test_piv_post_no_data():
     post_and_check("/piv/", 405, "The method is not allowed for the requested URL.", None)
     post_and_check("/piv/{}".format(PIV_CONTRIBUTOR), 400, "invalid arguments", "no piv data provided")
     post_and_check("/piv/unknown_id", 404, "Contributor 'unknown_id' not found", None)
+
+
+def test_piv_simple_post(mock_rabbitmq):
+    """
+    simple PIV post should be stored in db as a RealTimeUpdate
+    """
+    piv_feed = "{}"  # TODO: use a valid PIV feed
+    res = api_post("/piv/{}".format(PIV_CONTRIBUTOR), data=piv_feed)
+    assert "PIV feed processed" in res.get("message")
+
+    with app.app_context():
+        rtu_array = RealTimeUpdate.query.all()
+        assert len(rtu_array) == 1
+        rtu = rtu_array[0]
+        assert "-" in rtu.id
+        assert rtu.created_at
+        assert rtu.status == "KO"  # TODO xfail: should be "OK"
+        assert rtu.error is not None  # TODO xfail: no error for a valid PIV feed
+        assert rtu.contributor_id == PIV_CONTRIBUTOR
+        assert rtu.connector == ConnectorType.piv.value
+        assert rtu.raw_data == piv_feed
+    assert mock_rabbitmq.call_count == 1
