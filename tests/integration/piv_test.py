@@ -201,7 +201,11 @@ def test_piv_purge(mock_rabbitmq):
         assert len(RealTimeUpdate.query.all()) == 0
 
 
-def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture, piv_rabbitmq_handler_fixture):
+def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
+    contributor_id = "realtime.wuhan"
+    exchange_name = "piv"
+    queue_name = "piv_kirin"
+
     # Launch a PivWorker
     def piv_worker(pg_docker_fixture, contributor):
         import kirin
@@ -217,16 +221,18 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture, piv
     #####
     ## Init test environment
     #####
+
+    # Create the test MQ Handler (to publish messages on the queue)
+    mq_handler = rabbitmq_docker_fixture.create_rabbitmq_handler(exchange_name, "fanout")
     # Create the PIV contributor
-    contributor_id = "realtime.wuhan"
     new_contrib = {
         "id": contributor_id,
         "navitia_coverage": "zh",
         "navitia_token": "dengdengdengdeng",
         "connector_type": ConnectorType.piv.value,
         "broker_url": rabbitmq_docker_fixture.url,
-        "exchange_name": "piv",
-        "queue_name": "kirin_dev",
+        "exchange_name": exchange_name,
+        "queue_name": queue_name,
     }
     print("Setting up the PIV contributor")
     resp = test_client.post("/contributors", json=new_contrib)
@@ -243,7 +249,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture, piv
     #####
     ## Test
     #####
-    piv_rabbitmq_handler_fixture.publish(str('{"key": "Some valid JSON"}'), contributor_id)
+    mq_handler.publish(str('{"key": "Some valid JSON"}'), contributor_id)
     try:
         wait(lambda: db.session.execute("select * from real_time_update").rowcount == 1, timeout_seconds=3)
     except TimeoutExpired:
