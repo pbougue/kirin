@@ -94,7 +94,7 @@ class PivWorker(ConsumerMixin):
 
     def _get_exchange(self, exchange_name):
         print("Get Exchange...")
-        return Exchange(exchange_name, "fanout", durable=True, no_declare=True)
+        return Exchange(exchange_name, "fanout", durable=True, no_declare=True, auto_delete=False)
 
     def _get_queue(self, exchange, queue_name):
         print("Get Queue...")

@@ -32,6 +32,7 @@ from __future__ import absolute_import, print_function, unicode_literals, divisi
 
 import datetime
 import threading
+from time import sleep
 
 import pytest
 
@@ -226,6 +227,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
 
     # Create the test MQ Handler (to publish messages on the queue)
     mq_handler = rabbitmq_docker_fixture.create_rabbitmq_handler(exchange_name, "fanout")
+    sleep(2)
 
     # Create the PIV contributor
     new_contrib = {
@@ -254,20 +256,33 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
     #####
     def test_queue(broker_url, queue_name):
         try:
-            connection = Connection(broker_url)
-            queue = Queue(queue_name, channel=connection.default_channel, no_declare=True)
-            queue.queue_declare(passive=True)
+            connection = mq_handler._connection
+            channel = connection.channel()
+            queue = Queue(
+                queue_name,
+                mq_handler._exchange,
+                channel=channel,
+                no_declare=True,
+                auto_delete=False,
+                durable=True,
+            )
+            queue.queue_declare(nowait=False, passive=True)
+            print("Queue OK!")
             return True
         except NotFound as e:
+            print("Queue not yet created...")
             return False
 
-    try:
+    """try:
         wait(lambda: test_queue(rabbitmq_docker_fixture.url, queue_name), timeout_seconds=5)
     except TimeoutExpired:
-        raise AssertionError("Queue was never created")
+        raise AssertionError("Queue was never created")"""
+
+    sleep(2)
+
     mq_handler.publish(str('{"key": "Some valid JSON"}'), contributor_id)
     try:
-        wait(lambda: db.session.execute("select * from real_time_update").rowcount == 1, timeout_seconds=3)
+        wait(lambda: db.session.execute("select * from real_time_update").rowcount >= 1, timeout_seconds=5)
     except TimeoutExpired:
         raise AssertionError("PIV MQ Message was never saved to database")
 
