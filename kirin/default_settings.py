@@ -56,7 +56,7 @@ COTS_PAR_IV_REQUEST_TIMEOUT = int(
 
 # PIV configuration
 BROKER_CONSUMER_CONFIGURATION_RELOAD_INTERVAL = int(
-    os.getenv("KIRIN_BROKER_CONSUMER_CONFIGURATION_RELOAD_INTERVAL", timedelta(minutes=1).total_seconds())
+    os.getenv("KIRIN_BROKER_CONSUMER_CONFIGURATION_RELOAD_INTERVAL", timedelta(seconds=1).total_seconds())
 )
 
 

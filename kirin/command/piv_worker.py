@@ -52,6 +52,7 @@ CONF_RELOAD_INTERVAL = timedelta(
 
 class PivWorker(ConsumerMixin):
     def __init__(self, contributor):
+        print("Initializing PivWorker...")
         if contributor.connector_type != ConnectorType.piv.value:
             raise ValueError(
                 "Contributor '{0}': PivWorker requires type {1}".format(contributor.id, ConnectorType.piv.value)
@@ -68,26 +69,39 @@ class PivWorker(ConsumerMixin):
             )
         if not contributor.queue_name:
             raise ValueError("Missing 'queue_name' configuration for contributor '{0}'".format(contributor.id))
+        print("Initializing PivWorker... conditions checked")
         self.last_config_checked_time = datetime.now()
         self.broker_url = deepcopy(contributor.broker_url)
         self.builder = KirinModelBuilder(contributor)
+        print("Initializing PivWorker... model built")
 
     def __enter__(self):
+        print("Entering PivWorker...")
         self.connection = Connection(self.builder.contributor.broker_url)
+        print("Entering PivWorker... Connection infos")
+        print("{0}".format(self.connection.info()))
+        print("Entering PivWorker... connection created")
         self.exchange = self._get_exchange(self.builder.contributor.exchange_name)
+        print("Entering PivWorker... exchange created")
         self.queue = self._get_queue(self.exchange, self.builder.contributor.queue_name)
+        print("Entering PivWorker... queue created")
         return self
 
     def __exit__(self, type, value, traceback):
+        print("Exiting PivWorker...")
         self.connection.release()
+        print("Exiting PivWorker... connection released")
 
     def _get_exchange(self, exchange_name):
+        print("Get Exchange...")
         return Exchange(exchange_name, "fanout", durable=True, no_declare=True)
 
     def _get_queue(self, exchange, queue_name):
+        print("Get Queue...")
         return Queue(queue_name, exchange, durable=True, auto_delete=False)
 
     def get_consumers(self, Consumer, channel):
+        print("Get Consumers...")
         return [
             Consumer(
                 queues=[self.queue],
@@ -98,42 +112,58 @@ class PivWorker(ConsumerMixin):
         ]
 
     def process_message(self, body, message):
+        print("Processing message...")
         wrap_build(self.builder, body)
+        print("Processing message... message processed")
         # TODO: We might want to not acknowledge the message in case of error in
         # the processing.
         message.ack()
+        print("Processing message... message acknowledged")
 
     def on_iteration(self):
+        print("Iterating...")
         if datetime.now() - self.last_config_checked_time < CONF_RELOAD_INTERVAL:
+            print("Iterating... not iterating (not enough time since last iteration)")
             return
         else:
             # SQLAlchemy is not querying the DB for read (uses cache instead),
             # unless we specifically tell that the data is expired.
+            print("Iterating... expiring DB data")
+            print("Iterating... db = {0}".format(db))
+            print("Iterating... db.session = {0}".format(db.session))
             db.session.expire(self.builder.contributor, ["broker_url", "exchange_name", "queue_name"])
             self.last_config_checked_time = datetime.now()
+            print("Iterating... DB expired")
         contributor = get_piv_contributor(self.builder.contributor.id)
+        print("Iterating... contributor updated")
         if not contributor:
+            print("Iterating... killing the worker since contributor disappeared")
             logger.info(
                 "contributor '{0}' doesn't exist anymore, let the worker die".format(self.builder.contributor.id)
             )
             self.should_stop = True
             return
         if contributor.broker_url != self.broker_url:
+            print("Iterating... killing the worker since broker URL changed")
             logger.info("broker URL for contributor '{0}' changed, let the worker die".format(contributor.id))
             self.should_stop = True
             return
         if contributor.exchange_name != self.exchange.name:
+            print("Iterating... exchange name changed")
             logger.info(
                 "exchange name for contributor '{0}' changed, worker updated".format(contributor.exchange_name)
             )
             self.exchange = self._get_exchange(contributor.exchange_name)
             self.queue = self._get_queue(self.exchange, contributor.queue_name)
         if contributor.queue_name != self.queue.name:
+            print("Iterating... queue name changed")
             logger.info(
                 "queue name for contributor '{0}' changed, worker updated".format(contributor.queue_name)
             )
             self.queue = self._get_queue(self.exchange, contributor.queue_name)
+        print("Iterating... updating model")
         self.builder = KirinModelBuilder(contributor)
+        print("Iterating... model updated")
 
 
 @manager.command

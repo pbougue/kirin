@@ -31,6 +31,7 @@
 from __future__ import absolute_import, print_function, unicode_literals, division
 
 import datetime
+import threading
 
 import pytest
 
@@ -38,9 +39,12 @@ from kirin import app, db
 from kirin.core.model import RealTimeUpdate, TripUpdate, StopTimeUpdate, VehicleJourney
 from kirin.core.types import ConnectorType
 from kirin.tasks import purge_trip_update, purge_rt_update
+from kirin.piv.piv import get_piv_contributor
+from kirin.command.piv_worker import PivWorker
 from tests.check_utils import api_post, api_get
 from tests import mock_navitia
 from tests.integration.conftest import PIV_CONTRIBUTOR_ID
+from waiting import wait, TimeoutExpired
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -62,6 +66,13 @@ def mock_rabbitmq(monkeypatch):
     monkeypatch.setattr("kombu.messaging.Producer.publish", mock_amqp)
 
     return mock_amqp
+
+
+@pytest.yield_fixture
+def test_client():
+    app.testing = True
+    with app.app_context(), app.test_client() as tester:
+        yield tester
 
 
 def test_wrong_get_piv_with_id():
@@ -188,3 +199,61 @@ def test_piv_purge(mock_rabbitmq):
         assert len(StopTimeUpdate.query.all()) == 0
         assert db.session.execute("select * from associate_realtimeupdate_tripupdate").rowcount == 0
         assert len(RealTimeUpdate.query.all()) == 0
+
+
+def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture, piv_rabbitmq_handler_fixture):
+    contributor_id = "realtime.wuhan"
+    piv_rabbitmq_handler_fixture.publish(str('{"key": "Some valid JSON"}'), contributor_id)
+    # Launch a PivWorker
+    def piv_worker(pg_docker_fixture, contributor):
+        import kirin
+        from kirin import app, db, manager
+        from tests.conftest import init_flask_db
+
+        with app.app_context():
+            # re-init the db by overriding the db_url
+            init_flask_db(pg_docker_fixture)
+            with PivWorker(contributor) as worker:
+                worker.run()
+
+    #####
+    ## Init test environment
+    #####
+    # Create the PIV contributor
+    contributor_id = "realtime.wuhan"
+    new_contrib = {
+        "id": contributor_id,
+        "navitia_coverage": "zh",
+        "navitia_token": "dengdengdengdeng",
+        "connector_type": ConnectorType.piv.value,
+        "broker_url": rabbitmq_docker_fixture.url,
+        "exchange_name": "piv",
+        "queue_name": "kirin_dev",
+    }
+    print("Setting up the PIV contributor")
+    resp = test_client.post("/contributors", json=new_contrib)
+    assert resp.status_code == 201
+
+    contributor = get_piv_contributor("realtime.wuhan")
+    piv_worker_thread = threading.Thread(target=piv_worker, args=(pg_docker_fixture, contributor))
+    piv_worker_thread.start()
+    try:
+        wait(lambda: piv_worker_thread.is_alive() == True, timeout_seconds=5)
+    except TimeoutExpired:
+        raise AssertionError("Failed to start PivWorker in a thread")
+
+    #####
+    ## Test
+    #####
+    piv_rabbitmq_handler_fixture.publish(str('{"key": "Some valid JSON"}'), contributor_id)
+    try:
+        wait(lambda: db.session.execute("select * from real_time_update").rowcount == 1, timeout_seconds=3)
+    except TimeoutExpired:
+        raise AssertionError("PIV MQ Message was never saved to database")
+
+    #####
+    ## Clean test environment
+    #####
+    test_client.delete("/contributors/{}".format(contributor_id))
+    # PivWorker should die eventually when no PIV contributors is available
+    wait(lambda: piv_worker_thread.is_alive() == False, timeout_seconds=3)

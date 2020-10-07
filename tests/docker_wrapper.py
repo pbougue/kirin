@@ -288,19 +288,23 @@ class RabbitMQDockerWrapper(DockerWrapper):
         protocol = "pyamqp"
         username = "guest"
         password = "guest"
-        url = "{0}://{1}:{2}@{3}//?heartbeat=60".format(protocol, username, password, self.ip_addr)
-        self.handler = RabbitMQHandler(url, "navitia")
+        self.url = "{0}://{1}:{2}@{3}//?heartbeat=60".format(protocol, username, password, self.ip_addr)
+        self.handlers = []
 
-    def get_rabbitmq_handler(self):
+    def create_rabbitmq_handler(self, exchange_name, exchange_type):
         # type: () -> RabbitMQHandler
-        return self.handler
+        handler = RabbitMQHandler(self.url, exchange_name, exchange_type)
+        self.handlers.append(handler)
+        return handler
 
     @retry(stop_max_delay=30000, wait_fixed=100, retry_on_exception=lambda e: isinstance(e, Exception))
     def test_rabbitmq_handler(self):
-        self.handler.connect()
+        for handler in self.handlers:
+            handler.connect()
 
     def close(self):
-        self.handler.close()
+        for handler in self.handlers:
+            handler.close()
         super(RabbitMQDockerWrapper, self).close()
 
 

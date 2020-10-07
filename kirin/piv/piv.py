@@ -46,12 +46,14 @@ def get_piv_contributors(include_deactivated=False):
     """
     :return: all PIV contributors from db (not configurable via file)
     """
+    print("Get PIV contributors...")
     piv_contributors = [
         c
         for c in model.Contributor.find_by_connector_type(
             ConnectorType.piv.value, include_deactivated=include_deactivated
         )
     ]
+    print("Get PIV contributors... piv_contributors = {0}".format(piv_contributors))
     return piv_contributors
 
 
@@ -60,8 +62,9 @@ def get_piv_contributor(contributor_id):
     :param contributor_id: Identifier of the contributor
     :return: The PIV contributor from DB corresponding to the input ID
     """
-    # FIXME: Raise an exception if no contributor is found?
+    print("Get PIV contributor...")
     contributors = [c for c in get_piv_contributors() if c.id == contributor_id]
+    print("Get PIV contributor... contributors = {0}".format(contributors))
     return contributors[0] if contributors else None
 
 
