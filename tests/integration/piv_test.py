@@ -202,8 +202,6 @@ def test_piv_purge(mock_rabbitmq):
 
 
 def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture, piv_rabbitmq_handler_fixture):
-    contributor_id = "realtime.wuhan"
-    piv_rabbitmq_handler_fixture.publish(str('{"key": "Some valid JSON"}'), contributor_id)
     # Launch a PivWorker
     def piv_worker(pg_docker_fixture, contributor):
         import kirin

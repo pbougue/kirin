@@ -36,6 +36,7 @@ import psycopg2
 from io import BytesIO
 
 from redis import ConnectionPool
+from kombu import Connection
 from kirin import Redis
 from kirin.rabbitmq_handler import RabbitMQHandler
 from typing import List, Optional, Dict, IO
@@ -299,8 +300,9 @@ class RabbitMQDockerWrapper(DockerWrapper):
 
     @retry(stop_max_delay=30000, wait_fixed=100, retry_on_exception=lambda e: isinstance(e, Exception))
     def test_rabbitmq_handler(self):
-        for handler in self.handlers:
-            handler.connect()
+        connection = Connection(self.url)
+        connection.connect()
+        connection.release()
 
     def close(self):
         for handler in self.handlers:
