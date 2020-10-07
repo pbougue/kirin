@@ -35,6 +35,8 @@ import threading
 
 import pytest
 
+from kombu import Connection, Queue
+from amqp.exceptions import NotFound
 from kirin import app, db
 from kirin.core.model import RealTimeUpdate, TripUpdate, StopTimeUpdate, VehicleJourney
 from kirin.core.types import ConnectorType
@@ -224,6 +226,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
 
     # Create the test MQ Handler (to publish messages on the queue)
     mq_handler = rabbitmq_docker_fixture.create_rabbitmq_handler(exchange_name, "fanout")
+
     # Create the PIV contributor
     new_contrib = {
         "id": contributor_id,
@@ -249,6 +252,19 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
     #####
     ## Test
     #####
+    def test_queue(broker_url, queue_name):
+        try:
+            connection = Connection(broker_url)
+            queue = Queue(queue_name, channel=connection.default_channel, no_declare=True)
+            queue.queue_declare(passive=True)
+            return True
+        except NotFound as e:
+            return False
+
+    try:
+        wait(lambda: test_queue(rabbitmq_docker_fixture.url, queue_name), timeout_seconds=5)
+    except TimeoutExpired:
+        raise AssertionError("Queue was never created")
     mq_handler.publish(str('{"key": "Some valid JSON"}'), contributor_id)
     try:
         wait(lambda: db.session.execute("select * from real_time_update").rowcount == 1, timeout_seconds=3)
