@@ -223,7 +223,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
         channel = connection.channel()
         channel.queue_declare(queue_name, passive=True)  # raises NotFound if absent
 
-    def piv_worker(pg_docker_fixture, contributor):
+    def piv_worker(pg_docker_fixture, contributor_id):
         import kirin
         from kirin import app, db, manager
         from tests.conftest import init_flask_db
@@ -231,6 +231,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
         with app.app_context():
             # re-init the db by overriding the db_url
             init_flask_db(pg_docker_fixture)
+            contributor = get_piv_contributor(contributor_id)
             with PivWorker(contributor) as worker:
                 worker.run()
 
@@ -255,8 +256,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
     resp = test_client.post("/contributors", json=new_contrib)
     assert resp.status_code == 201
 
-    contributor = get_piv_contributor("realtime.wuhan")
-    piv_worker_thread = threading.Thread(target=piv_worker, args=(pg_docker_fixture, contributor))
+    piv_worker_thread = threading.Thread(target=piv_worker, args=(pg_docker_fixture, contributor_id))
     piv_worker_thread.start()
 
     def test_alive(thread):
