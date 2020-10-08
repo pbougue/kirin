@@ -61,6 +61,7 @@ class DockerWrapper(object):
         dockerfile_path=None,  # type: Optional[unicode]
         env_vars={},  # type: Dict[unicode, unicode]
         mounts=None,  # type: Optional[List[docker.types.Mount]]
+        ports=None,
     ):
         # type: (...) -> None
         base_url = "unix://var/run/docker.sock"
@@ -72,6 +73,7 @@ class DockerWrapper(object):
         self.container_name = container_name
         self.env_vars = env_vars
         self.mounts = mounts or []
+        self.ports = ports
 
         logger.info("Trying to build/update the docker image")
 
@@ -105,7 +107,11 @@ class DockerWrapper(object):
                 raise
 
         self.container = self.docker_client.containers.create(
-            self.image_name, name=self.container_name, environment=self.env_vars, mounts=self.mounts
+            self.image_name,
+            name=self.container_name,
+            environment=self.env_vars,
+            mounts=self.mounts,
+            ports=self.ports,
         )
         logger.info("docker id is {}".format(self.container.id))
         logger.info("starting the temporary docker")
@@ -283,7 +289,7 @@ class RabbitMQDockerWrapper(DockerWrapper):
     ):
         # type: (...) -> None
         super(RabbitMQDockerWrapper, self).__init__(
-            image_name, container_name, dockerfile_obj, dockerfile_path, env_vars, mounts
+            image_name, container_name, dockerfile_obj, dockerfile_path, env_vars, mounts, ports={"15672": 45672}
         )
         protocol = "pyamqp"
         username = "guest"
@@ -305,7 +311,7 @@ class RabbitMQDockerWrapper(DockerWrapper):
 
 
 def rabbitmq_docker():
-    rabbitmq_image = "rabbitmq:3"
+    rabbitmq_image = "rabbitmq:3-management"
 
     # The best way to get the image would be to get it from dockerhub,
     # but with this dumb wrapper the runtime time of the unit tests is reduced by 10s
