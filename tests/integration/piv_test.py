@@ -32,6 +32,7 @@ from __future__ import absolute_import, print_function, unicode_literals, divisi
 
 import datetime
 import threading
+from time import sleep
 
 import pytest
 
@@ -212,30 +213,15 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
     wait_until = Retrying(stop_max_delay=10000, wait_exponential_multiplier=100)
 
     # Launch a PivWorker
-    def test_exchange(exchange_name):
-        try:
-            exchange = Exchange(exchange_name, no_declare=True, auto_delete=False, durable=True)
-            exchange.declare(nowait=False, passive=True)
-            return True
-        except Exception as e:
-            return False
+    def test_exchange(broker_url, exchange_name):
+        connection = Connection(broker_url)
+        channel = connection.channel()
+        channel.exchange_declare(exchange_name, "", passive=True)  # raises NotFound if absent
 
-    def test_queue(broker_url, exchange_name, queue_name):
-        try:
-            connection = Connection(broker_url)
-            channel = connection.channel()
-            queue = Queue(
-                queue_name,
-                mq_handler._exchange,
-                channel=channel,
-                no_declare=True,
-                auto_delete=False,
-                durable=True,
-            )
-            queue.queue_declare(nowait=False, passive=True)
-            return True
-        except NotFound as e:
-            return False
+    def test_queue(broker_url, queue_name):
+        connection = Connection(broker_url)
+        channel = connection.channel()
+        channel.queue_declare(queue_name, passive=True)  # raises NotFound if absent
 
     def piv_worker(pg_docker_fixture, contributor):
         import kirin
@@ -254,7 +240,7 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
 
     # Create the test MQ Handler (to publish messages on the queue)
     mq_handler = rabbitmq_docker_fixture.create_rabbitmq_handler(exchange_name, "fanout")
-    wait_until.call(lambda: test_exchange(exchange_name))
+    wait_until.call(lambda: test_exchange(rabbitmq_docker_fixture.url, exchange_name))
 
     # Create the PIV contributor
     new_contrib = {
@@ -272,19 +258,35 @@ def test_piv_worker(test_client, pg_docker_fixture, rabbitmq_docker_fixture):
     contributor = get_piv_contributor("realtime.wuhan")
     piv_worker_thread = threading.Thread(target=piv_worker, args=(pg_docker_fixture, contributor))
     piv_worker_thread.start()
-    wait_until.call(lambda: piv_worker_thread.is_alive() == True)
+
+    def test_alive(thread):
+        if not thread.is_alive():
+            raise Exception("Thread not alive")
+
+    wait_until.call(lambda: test_alive(piv_worker_thread))
 
     #####
     ## Test
     #####
-    wait_until.call(lambda: test_queue(rabbitmq_docker_fixture.url, exchange_name, queue_name))
+    wait_until.call(lambda: test_queue(rabbitmq_docker_fixture.url, queue_name))
 
     mq_handler.publish(str('{"key": "Some valid JSON"}'), contributor_id)
-    wait_until.call(lambda: db.session.execute("select * from real_time_update").rowcount >= 1)
+
+    def test_has_rtu(db):
+        if db.session.execute("select * from real_time_update").rowcount != 1:
+            raise Exception("Not 1 RTU in db")
+
+    wait_until.call(lambda: test_has_rtu(db))
 
     #####
     ## Clean test environment
     #####
     test_client.delete("/contributors/{}".format(contributor_id))
     # PivWorker should die eventually when no PIV contributors is available
-    wait_until.call(lambda: piv_worker_thread.is_alive() == False)
+
+    def test_dead(thread):
+        if thread.is_alive():
+            raise Exception("Thread is alive")
+
+    wait_until.call(lambda: test_dead(piv_worker_thread))
+    print("Finished")

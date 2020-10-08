@@ -12,3 +12,5 @@ COTS_PAR_IV_CLIENT_SECRET = "tchoutchou_secret"
 
 COTS_CONTRIBUTOR = "rt.tchoutchou"
 GTFS_RT_CONTRIBUTOR = "rt.vroumvroum"
+
+BROKER_CONSUMER_CONFIGURATION_RELOAD_INTERVAL = 1  # in seconds

@@ -137,8 +137,9 @@ class RabbitMQHandler(object):
         self._connection = BrokerConnection(connection_string)
         self._connections = {self._connection}  # set of connection for the heartbeat
         self._exchange = Exchange(
-            exchange_name, durable=True, delivery_mode=2, type=exchange_type, auto_delete=False
+            exchange_name, durable=True, delivery_mode=2, type=exchange_type, auto_delete=False, no_declare=False
         )
+        self._exchange.declare(nowait=False, passive=False, channel=self._connection.channel())
         monitor_heartbeats(self._connections)
 
     @retry(wait_fixed=200, stop_max_attempt_number=3)
