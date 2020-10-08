@@ -36,6 +36,7 @@ import psycopg2
 from io import BytesIO
 
 from redis import ConnectionPool
+from kombu import Connection
 from kirin import Redis
 from kirin.rabbitmq_handler import RabbitMQHandler
 from typing import List, Optional, Dict, IO
@@ -288,19 +289,28 @@ class RabbitMQDockerWrapper(DockerWrapper):
         protocol = "pyamqp"
         username = "guest"
         password = "guest"
-        url = "{0}://{1}:{2}@{3}//?heartbeat=60".format(protocol, username, password, self.ip_addr)
-        self.handler = RabbitMQHandler(url, "navitia")
+        self.url = "{0}://{1}:{2}@{3}//?heartbeat=60".format(protocol, username, password, self.ip_addr)
+        self.handlers = []  # type: List[RabbitMQHandler]
 
-    def get_rabbitmq_handler(self):
-        # type: () -> RabbitMQHandler
-        return self.handler
+    def create_rabbitmq_handler(
+        self,
+        exchange_name,  # type: str
+        exchange_type,  # type: str
+    ):
+        # type: (...) -> RabbitMQHandler
+        handler = RabbitMQHandler(self.url, exchange_name, exchange_type)
+        self.handlers.append(handler)
+        return handler
 
     @retry(stop_max_delay=30000, wait_fixed=100, retry_on_exception=lambda e: isinstance(e, Exception))
     def test_rabbitmq_handler(self):
-        self.handler.connect()
+        connection = Connection(self.url)
+        connection.connect()
+        connection.release()
 
     def close(self):
-        self.handler.close()
+        for handler in self.handlers:
+            handler.close()
         super(RabbitMQDockerWrapper, self).close()
 
 

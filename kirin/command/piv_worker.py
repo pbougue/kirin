@@ -82,7 +82,7 @@ class PivWorker(ConsumerMixin):
         self.connection.release()
 
     def _get_exchange(self, exchange_name):
-        return Exchange(exchange_name, "fanout", durable=True, no_declare=True)
+        return Exchange(exchange_name, "fanout", durable=True, no_declare=True, auto_delete=False)
 
     def _get_queue(self, exchange, queue_name):
         return Queue(queue_name, exchange, durable=True, auto_delete=False)
